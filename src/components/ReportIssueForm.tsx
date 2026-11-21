@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Compass,
   Copy,
+  ExternalLink,
   Loader2,
   MapPin,
   Send,
@@ -122,8 +123,11 @@ export function ReportIssueForm({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
-  const [ward, setWard] = useState<string>(WARDS[0]);
+  const [ward, setWard] = useState<string>('Auto-Detected Municipal Zone');
   const [coordinates, setCoordinates] = useState({ lat: 12.9716, lng: 77.5946 });
+  const [gpsStatus, setGpsStatus] = useState<'idle' | 'locating' | 'locked' | 'error'>('idle');
+  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
+  const [gpsMessage, setGpsMessage] = useState<string | null>(null);
   const [userCategory, setUserCategory] = useState('auto');
   const [reporterName, setReporterName] = useState(currentUser?.name ?? '');
   const [reporterContact, setReporterContact] = useState('');
@@ -161,6 +165,9 @@ export function ReportIssueForm({
     setLocation(preset.location);
     setWard(preset.ward);
     setCoordinates(preset.coordinates);
+    setGpsStatus('idle');
+    setGpsAccuracy(null);
+    setGpsMessage(null);
     setUserCategory('auto');
     setAnalysis(null);
     setDuplicates([]);
@@ -170,33 +177,104 @@ export function ReportIssueForm({
 
   const handleDetectGps = () => {
     setIsLocating(true);
+    setGpsStatus('locating');
+    setGpsMessage('Acquiring high-accuracy GPS signal & resolving street address...');
     setErrorMessage(null);
-    if (typeof navigator !== 'undefined' && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setCoordinates({
-            lat: Number(pos.coords.latitude.toFixed(5)),
-            lng: Number(pos.coords.longitude.toFixed(5)),
-          });
-          if (!location.trim()) {
-            setLocation(`GPS Pin (${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)})`);
-          }
-          setIsLocating(false);
-        },
-        () => {
-          // Graceful deterministic fallback if geolocation is blocked in demo browser
-          setCoordinates({ lat: 12.9698, lng: 77.6012 });
-          if (!location.trim()) {
-            setLocation('Civic Center Avenue (Auto-located)');
-          }
-          setIsLocating(false);
-        },
-        { timeout: 3500 }
-      );
-    } else {
-      setCoordinates({ lat: 12.9698, lng: 77.6012 });
+
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
       setIsLocating(false);
+      setGpsStatus('error');
+      setGpsMessage('GPS geolocation is not supported in this browser. Please enter your street or landmark manually.');
+      return;
     }
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = Number(pos.coords.latitude.toFixed(5));
+        const lng = Number(pos.coords.longitude.toFixed(5));
+        const accuracy = Number.isFinite(pos.coords.accuracy) ? Math.round(pos.coords.accuracy) : null;
+
+        setCoordinates({ lat, lng });
+        setGpsAccuracy(accuracy);
+
+        // Reverse-geocode live GPS coordinates to a real street & locality address
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 4500);
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(
+              lat
+            )}&lon=${encodeURIComponent(lng)}&zoom=18&addressdetails=1`,
+            {
+              headers: { Accept: 'application/json' },
+              signal: controller.signal,
+            }
+          );
+
+          if (res.ok) {
+            const data = (await res.json()) as {
+              display_name?: string;
+              address?: Record<string, string | undefined>;
+            };
+            const addr = data.address || {};
+            const street =
+              [addr.house_number, addr.road || addr.pedestrian || addr.amenity || addr.building]
+                .filter(Boolean)
+                .join(' ') || '';
+            const locality =
+              addr.suburb ||
+              addr.neighbourhood ||
+              addr.city_district ||
+              addr.quarter ||
+              addr.village ||
+              addr.town ||
+              '';
+            const city = addr.city || addr.town || addr.state_district || '';
+
+            const formatted = [street, locality, city].filter(Boolean).join(', ');
+            if (formatted.length >= 3) {
+              setLocation(formatted);
+            } else if (data.display_name) {
+              setLocation(data.display_name.split(',').slice(0, 3).join(',').trim());
+            } else {
+              setLocation(`GPS Pin (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+            }
+
+            setWard(locality || city || 'GPS Located Zone');
+            setGpsStatus('locked');
+            setGpsMessage('Live street address & coordinates resolved via GPS');
+            return;
+          }
+        } catch {
+          // Reverse-geocoding unavailable or timed out; keep exact GPS coordinates cleanly
+        } finally {
+          clearTimeout(timer);
+          setIsLocating(false);
+        }
+
+        if (!location.trim()) {
+          setLocation(`GPS Pin (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+        }
+        setWard('GPS Located Zone');
+        setGpsStatus('locked');
+        setGpsMessage('GPS coordinates locked');
+      },
+      (err) => {
+        setIsLocating(false);
+        setGpsStatus('error');
+        setGpsAccuracy(null);
+        if (err.code === 1) {
+          setGpsMessage(
+            'Location permission denied. Enable browser location access or type your street/landmark manually.'
+          );
+        } else if (err.code === 3) {
+          setGpsMessage('GPS signal timed out. Move near an open area or type your location manually.');
+        } else {
+          setGpsMessage('Unable to detect GPS coordinates right now. Please type your location manually.');
+        }
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 15000 }
+    );
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -291,6 +369,10 @@ export function ReportIssueForm({
         setTitle('');
         setDescription('');
         setLocation('');
+        setWard('Auto-Detected Municipal Zone');
+        setGpsStatus('idle');
+        setGpsAccuracy(null);
+        setGpsMessage(null);
         setImageUrl(undefined);
         setDuplicates([]);
       }
@@ -435,64 +517,93 @@ export function ReportIssueForm({
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
+          <div className="space-y-2.5 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <label htmlFor="issue-location" className="block text-sm font-semibold text-slate-800">
                 Street / Landmark Location <span className="text-red-600">*</span>
               </label>
-              <div className="relative mt-1.5">
-                <MapPin
-                  className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400"
-                  aria-hidden="true"
-                />
-                <input
-                  id="issue-location"
-                  type="text"
-                  required
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  placeholder="e.g., 100 Feet Road, Near Metro Gate"
-                  className="focus-ring w-full rounded-xl border border-slate-300 py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="issue-ward" className="block text-sm font-semibold text-slate-800">
-                Municipal Ward / Zone
-              </label>
-              <select
-                id="issue-ward"
-                value={ward}
-                onChange={(e) => setWard(e.target.value)}
-                className="focus-ring mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900"
+              <button
+                type="button"
+                onClick={handleDetectGps}
+                disabled={isLocating}
+                className="focus-ring inline-flex items-center gap-1.5 rounded-xl bg-blue-700 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-800 disabled:opacity-60"
               >
-                {WARDS.map((w) => (
-                  <option key={w} value={w}>
-                    {w}
-                  </option>
-                ))}
-              </select>
+                {isLocating ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Compass className="h-3.5 w-3.5" aria-hidden="true" />
+                )}
+                <span>{isLocating ? 'Locating Address...' : 'Detect My GPS'}</span>
+              </button>
             </div>
-          </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5">
-            <div className="text-xs text-slate-700">
-              <span className="font-semibold">Coordinates:</span> {coordinates.lat}, {coordinates.lng}
+            <div className="relative">
+              <MapPin
+                className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400"
+                aria-hidden="true"
+              />
+              <input
+                id="issue-location"
+                type="text"
+                required
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="Click 'Detect My GPS' to auto-fill street address, or type landmark manually..."
+                className="focus-ring w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400"
+              />
             </div>
-            <button
-              type="button"
-              onClick={handleDetectGps}
-              disabled={isLocating}
-              className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 transition hover:bg-slate-100 disabled:opacity-60"
-            >
-              {isLocating ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-              ) : (
-                <Compass className="h-3.5 w-3.5 text-blue-600" aria-hidden="true" />
-              )}
-              <span>Detect GPS Coordinates</span>
-            </button>
+
+            {/* Live GPS Verification Strip */}
+            {gpsStatus === 'locating' && (
+              <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-900">
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-700" aria-hidden="true" />
+                <span>{gpsMessage}</span>
+              </div>
+            )}
+
+            {gpsStatus === 'locked' && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-950">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                    <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+                    GPS Locked{gpsAccuracy ? ` (±${gpsAccuracy}m)` : ''}
+                  </span>
+                  <span className="font-medium">{gpsMessage}</span>
+                  <span className="rounded bg-white px-2 py-0.5 font-mono text-[11px] text-slate-700 ring-1 ring-emerald-200">
+                    {coordinates.lat}, {coordinates.lng}
+                  </span>
+                </div>
+                <a
+                  href={`https://www.google.com/maps?q=${coordinates.lat},${coordinates.lng}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 font-semibold text-blue-700 hover:underline"
+                >
+                  <span>Verify Pin on Maps</span>
+                  <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                </a>
+              </div>
+            )}
+
+            {gpsStatus === 'error' && (
+              <div
+                role="alert"
+                className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950"
+              >
+                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700" aria-hidden="true" />
+                <span>{gpsMessage}</span>
+              </div>
+            )}
+
+            {gpsStatus === 'idle' && (
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+                <span>
+                  Coordinates: <strong className="font-mono text-slate-700">{coordinates.lat}, {coordinates.lng}</strong>
+                  {ward !== 'Auto-Detected Municipal Zone' ? ` · Zone: ${ward}` : ''}
+                </span>
+                <span>Auto-resolves street address &amp; locality via high-accuracy GPS</span>
+              </div>
+            )}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
