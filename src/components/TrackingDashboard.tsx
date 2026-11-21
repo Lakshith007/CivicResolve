@@ -23,6 +23,7 @@ import {
   ResolutionTimeline,
   StatusBadge,
 } from '@/components/CivicBadges';
+import { CivicGoogleMap } from '@/components/CivicGoogleMap';
 
 interface TrackingDashboardProps {
   issues: CivicIssue[];
@@ -60,6 +61,7 @@ export function TrackingDashboard({
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
   const [priorityFilter, setPriorityFilter] = useState<string>('All');
   const [onlyMine, setOnlyMine] = useState(false);
+  const [mapMode, setMapMode] = useState<'google' | 'grid'>('google');
   const [selectedMapIssueId, setSelectedMapIssueId] = useState<string | null>(highlightedId);
   const [expandedId, setExpandedId] = useState<string | null>(highlightedId);
   const [upvotingId, setUpvotingId] = useState<string | null>(null);
@@ -137,9 +139,35 @@ export function TrackingDashboard({
         <div className="lg:col-span-7">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h2 className="text-base font-bold text-slate-900">
-                City Ward Hotspot Map ({filteredIssues.length} plotted)
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-slate-900">
+                  City Ward Hotspot Map ({filteredIssues.length} plotted)
+                </h2>
+                <div className="flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setMapMode('google')}
+                    className={`focus-ring rounded px-2 py-0.5 text-[11px] font-semibold transition ${
+                      mapMode === 'google'
+                        ? 'bg-white text-blue-700 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Google Map
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMapMode('grid')}
+                    className={`focus-ring rounded px-2 py-0.5 text-[11px] font-semibold transition ${
+                      mapMode === 'grid'
+                        ? 'bg-white text-blue-700 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Spatial Grid
+                  </button>
+                </div>
+              </div>
               <p className="text-xs text-slate-500">
                 Click any pin to inspect issue details and department assignment.
               </p>
@@ -160,61 +188,72 @@ export function TrackingDashboard({
             </div>
           </div>
 
-          <div className="relative h-64 w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-900">
-            {/* Subtle street/ward grid */}
-            <svg
-              className="absolute inset-0 h-full w-full opacity-25"
-              aria-hidden="true"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <defs>
-                <pattern id="civicGrid" width="40" height="40" patternUnits="userSpaceOnUse">
-                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#94a3b8" strokeWidth="1" />
-                </pattern>
-              </defs>
-              <rect width="100%" height="100%" fill="url(#civicGrid)" />
-              <line x1="0" y1="52%" x2="100%" y2="48%" stroke="#38bdf8" strokeWidth="2" />
-              <line x1="45%" y1="0" x2="55%" y2="100%" stroke="#38bdf8" strokeWidth="2" />
-            </svg>
+          {mapMode === 'google' ? (
+            <CivicGoogleMap
+              issues={filteredIssues}
+              selectedIssueId={selectedMapIssue?.id ?? null}
+              onSelectIssue={(id) => {
+                setSelectedMapIssueId(id);
+                setExpandedId(id);
+              }}
+            />
+          ) : (
+            <div className="relative h-64 w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-900">
+              {/* Subtle street/ward grid */}
+              <svg
+                className="absolute inset-0 h-full w-full opacity-25"
+                aria-hidden="true"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <defs>
+                  <pattern id="civicGrid" width="40" height="40" patternUnits="userSpaceOnUse">
+                    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#94a3b8" strokeWidth="1" />
+                  </pattern>
+                </defs>
+                <rect width="100%" height="100%" fill="url(#civicGrid)" />
+                <line x1="0" y1="52%" x2="100%" y2="48%" stroke="#38bdf8" strokeWidth="2" />
+                <line x1="45%" y1="0" x2="55%" y2="100%" stroke="#38bdf8" strokeWidth="2" />
+              </svg>
 
-            <div className="pointer-events-none absolute left-3 top-2.5 rounded bg-slate-800/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-300">
-              Municipal Spatial Grid
+              <div className="pointer-events-none absolute left-3 top-2.5 rounded bg-slate-800/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-300">
+                Municipal Spatial Grid
+              </div>
+
+              {filteredIssues.map((issue) => {
+                const pos = projectCoordinates(issue.coordinates.lat, issue.coordinates.lng);
+                const isSelected = selectedMapIssue?.id === issue.id;
+                const pinColor =
+                  issue.priority === 'Critical'
+                    ? 'bg-red-500'
+                    : issue.priority === 'High'
+                      ? 'bg-amber-400'
+                      : issue.priority === 'Medium'
+                        ? 'bg-blue-500'
+                        : 'bg-slate-400';
+
+                return (
+                  <button
+                    key={issue.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedMapIssueId(issue.id);
+                      setExpandedId(issue.id);
+                    }}
+                    style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
+                    aria-label={`Select ticket ${issue.id}: ${issue.title}`}
+                    className={`focus-ring group absolute -translate-x-1/2 -translate-y-1/2 rounded-full p-1 transition ${
+                      isSelected ? 'z-20 scale-125 ring-4 ring-white' : 'z-10 hover:scale-110'
+                    }`}
+                  >
+                    <span className={`block h-4 w-4 rounded-full border-2 border-white ${pinColor}`} />
+                    {issue.priority === 'Critical' && issue.status !== 'Resolved' && (
+                      <span className="absolute inset-0 animate-ping rounded-full bg-red-400 opacity-60" />
+                    )}
+                  </button>
+                );
+              })}
             </div>
-
-            {filteredIssues.map((issue) => {
-              const pos = projectCoordinates(issue.coordinates.lat, issue.coordinates.lng);
-              const isSelected = selectedMapIssue?.id === issue.id;
-              const pinColor =
-                issue.priority === 'Critical'
-                  ? 'bg-red-500'
-                  : issue.priority === 'High'
-                    ? 'bg-amber-400'
-                    : issue.priority === 'Medium'
-                      ? 'bg-blue-500'
-                      : 'bg-slate-400';
-
-              return (
-                <button
-                  key={issue.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedMapIssueId(issue.id);
-                    setExpandedId(issue.id);
-                  }}
-                  style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
-                  aria-label={`Select ticket ${issue.id}: ${issue.title}`}
-                  className={`focus-ring group absolute -translate-x-1/2 -translate-y-1/2 rounded-full p-1 transition ${
-                    isSelected ? 'z-20 scale-125 ring-4 ring-white' : 'z-10 hover:scale-110'
-                  }`}
-                >
-                  <span className={`block h-4 w-4 rounded-full border-2 border-white ${pinColor}`} />
-                  {issue.priority === 'Critical' && issue.status !== 'Resolved' && (
-                    <span className="absolute inset-0 animate-ping rounded-full bg-red-400 opacity-60" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          )}
         </div>
 
         {/* Map Detail Spotlight */}
