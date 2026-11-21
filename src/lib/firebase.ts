@@ -11,16 +11,21 @@ import {
 import type { CivicIssue } from '@/types/civic';
 
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyB25m5vaMQTbgqLYxR-293hwtC9GKDLFMM',
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || 'civic-sence-4ef70.firebaseapp.com',
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'civic-sence-4ef70',
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'civic-sence-4ef70.firebasestorage.app',
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '789272533653',
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '1:789272533653:web:8435eb5e08289162de599c',
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || 'G-H4VMM78W6X',
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim() || '',
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN?.trim() || '',
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.trim() || '',
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET?.trim() || '',
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID?.trim() || '',
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID?.trim() || '',
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID?.trim() || '',
 };
 
-export function getFirebaseApp(): FirebaseApp {
+export function isFirebaseConfigured(): boolean {
+  return Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
+}
+
+export function getFirebaseApp(): FirebaseApp | null {
+  if (!isFirebaseConfigured()) return null;
   if (getApps().length > 0) {
     return getApp();
   }
@@ -29,9 +34,11 @@ export function getFirebaseApp(): FirebaseApp {
 
 let firestoreInstance: Firestore | null = null;
 
-export function getFirebaseDb(): Firestore {
+export function getFirebaseDb(): Firestore | null {
+  const app = getFirebaseApp();
+  if (!app) return null;
   if (!firestoreInstance) {
-    firestoreInstance = getFirestore(getFirebaseApp());
+    firestoreInstance = getFirestore(app);
   }
   return firestoreInstance;
 }
@@ -40,12 +47,14 @@ export function getFirebaseDb(): Firestore {
  * Initializes Firebase Analytics on the client side if supported by the browser environment.
  */
 export async function initAnalytics() {
-  if (typeof window === 'undefined') return null;
+  if (typeof window === 'undefined' || !isFirebaseConfigured()) return null;
   try {
+    const app = getFirebaseApp();
+    if (!app) return null;
     const { getAnalytics, isSupported } = await import('firebase/analytics');
     const supported = await isSupported();
     if (supported) {
-      return getAnalytics(getFirebaseApp());
+      return getAnalytics(app);
     }
   } catch {
     // Analytics unavailable in testing or unsupported environments
@@ -74,6 +83,7 @@ function removeUndefinedFields<T extends Record<string, unknown>>(obj: T): Recor
 export async function syncIssueToFirestore(issue: CivicIssue): Promise<boolean> {
   try {
     const db = getFirebaseDb();
+    if (!db) return false;
     const issueRef = doc(db, 'civic_issues', issue.id);
     const cleaned = removeUndefinedFields({
       ...issue,
@@ -98,6 +108,7 @@ export async function syncStatusUpdateToFirestore(
 ): Promise<boolean> {
   try {
     const db = getFirebaseDb();
+    if (!db) return false;
     const issueRef = doc(db, 'civic_issues', ticketId);
     const cleaned = removeUndefinedFields({
       ...updateData,
@@ -118,6 +129,7 @@ export async function syncStatusUpdateToFirestore(
 export async function fetchIssuesFromFirestore(): Promise<CivicIssue[] | null> {
   try {
     const db = getFirebaseDb();
+    if (!db) return null;
     const snap = await getDocs(collection(db, 'civic_issues'));
     if (snap.empty) return null;
     return snap.docs.map((d) => d.data() as CivicIssue);

@@ -79,9 +79,7 @@ export function CivicGoogleMap({
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapError, setMapError] = useState(false);
 
-  const apiKey =
-    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ||
-    'AIzaSyB9rguX4pw-EyXZRNaBLpKAqX03ekWq8RA';
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() || '';
 
   useEffect(() => {
     let isMounted = true;
