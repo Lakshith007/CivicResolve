@@ -79,6 +79,21 @@ function formatRelativeAge(isoDate: string): string {
   return `${days}d ${hrs % 24}h ago`;
 }
 
+function formatDateTime(isoDate: string): string {
+  return new Intl.DateTimeFormat('en-IN', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'Asia/Kolkata',
+  }).format(new Date(isoDate));
+}
+
+function formatShortDate(isoDate: string): string {
+  return new Intl.DateTimeFormat('en-IN', {
+    dateStyle: 'medium',
+    timeZone: 'Asia/Kolkata',
+  }).format(new Date(isoDate));
+}
+
 function formatDurationHours(hours: number | null): string {
   if (hours === null || !Number.isFinite(hours)) return 'N/A';
   if (hours < 1) return `${Math.max(1, Math.round(hours * 60))} mins`;
@@ -821,11 +836,11 @@ export function AdminDashboard({
                       <span className="block text-[11px] text-slate-500">{issue.category}</span>
                     </td>
                     <td className="whitespace-nowrap px-3 py-3 text-slate-600">
-                      <span className="block font-medium">
+                      <span suppressHydrationWarning className="block font-medium">
                         {formatRelativeAge(issue.createdAt)}
                       </span>
-                      <span className="text-[10px] text-slate-400">
-                        {new Date(issue.createdAt).toLocaleDateString()}
+                      <span suppressHydrationWarning className="text-[10px] text-slate-400">
+                        {formatShortDate(issue.createdAt)}
                       </span>
                     </td>
                     <td className="px-3 py-3">
@@ -951,8 +966,8 @@ export function AdminDashboard({
               <tbody className="divide-y divide-slate-100">
                 {visible.map((log) => (
                   <tr key={log.id} className="hover:bg-slate-50/70">
-                    <td className="whitespace-nowrap px-3 py-2.5 text-slate-500">
-                      {new Date(log.timestamp).toLocaleString()}
+                    <td suppressHydrationWarning className="whitespace-nowrap px-3 py-2.5 text-slate-500">
+                      {formatDateTime(log.timestamp)}
                     </td>
                     <td className="px-3 py-2.5">
                       <span className="font-semibold text-slate-900">{log.actorEmail}</span>
@@ -1136,7 +1151,7 @@ export function AdminDashboard({
                     </p>
                   )}
                   <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
-                    <span>Closed {new Date(item.updatedAt).toLocaleString()}</span>
+                    <span suppressHydrationWarning>Closed {formatDateTime(item.updatedAt)}</span>
                     <button
                       type="button"
                       onClick={() => openTriageModal(item, 'general')}
@@ -1245,9 +1260,9 @@ export function AdminDashboard({
                 <h3 id="triage-modal-title" className="mt-1 text-base font-bold text-slate-900">
                   {editingIssue.title}
                 </h3>
-                <p className="mt-0.5 text-xs text-slate-500">
+                <p suppressHydrationWarning className="mt-0.5 text-xs text-slate-500">
                   {editingIssue.location} · {editingIssue.ward} · Reported{' '}
-                  {new Date(editingIssue.createdAt).toLocaleString()}
+                  {formatDateTime(editingIssue.createdAt)}
                 </p>
               </div>
               <button

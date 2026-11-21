@@ -463,7 +463,14 @@ export function AdminHotspotMap({
                   </div>
                   <div className="flex items-center gap-1.5 text-slate-500">
                     <Clock className="h-3.5 w-3.5" aria-hidden="true" />
-                    <span>Reported {new Date(selectedIssue.createdAt).toLocaleString()}</span>
+                    <span suppressHydrationWarning>
+                      Reported{' '}
+                      {new Intl.DateTimeFormat('en-IN', {
+                        dateStyle: 'medium',
+                        timeStyle: 'short',
+                        timeZone: 'Asia/Kolkata',
+                      }).format(new Date(selectedIssue.createdAt))}
+                    </span>
                   </div>
                 </div>
 

@@ -147,13 +147,14 @@ export function ResolutionTimeline({
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
               <span className="font-semibold text-slate-800">{entry.status}</span>
               <span className="text-slate-500">• {entry.updatedBy}</span>
-              <time className="text-slate-400" dateTime={entry.timestamp}>
-                {new Date(entry.timestamp).toLocaleString([], {
+              <time suppressHydrationWarning className="text-slate-400" dateTime={entry.timestamp}>
+                {new Intl.DateTimeFormat('en-IN', {
                   month: 'short',
                   day: 'numeric',
                   hour: '2-digit',
                   minute: '2-digit',
-                })}
+                  timeZone: 'Asia/Kolkata',
+                }).format(new Date(entry.timestamp))}
               </time>
             </div>
             <p className="mt-0.5 text-slate-600">{entry.note}</p>
