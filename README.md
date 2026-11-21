@@ -46,6 +46,28 @@ Built for **PromptWars 2026**, **CivicResolve** connects citizens, dispatched mu
 
 ---
 
+## Screenshots
+
+### 1. Role-Selection Landing Portal (`/`)
+![Role-Selection Landing Portal](docs/screenshots/01-landing-portal.jpg)
+
+### 2. Citizen Report Form, GPS Verification & Gemini AI Triage (`/`)
+![Citizen Report and Gemini AI Triage](docs/screenshots/02-citizen-report-ai-triage.jpg)
+
+### 3. Field Crew Portal — Division-Scoped Dispatches (`/worker`)
+![Field Crew Portal](docs/screenshots/03-worker-field-crew-portal.jpg)
+
+### 4. Municipal Command Center — Overview & Critical Alerts (`/admin`)
+![Admin Command Center Overview](docs/screenshots/04-admin-command-overview.jpg)
+
+### 5. Admin Priority Triage Queue (`/admin` → Complaint Management)
+![Admin Priority Triage Queue](docs/screenshots/05-admin-triage-queue.jpg)
+
+### 6. Citywide Hotspot Map & Spatial Clustering (`/admin` → Geographic Insights)
+![Coimbatore Citywide Hotspot Map](docs/screenshots/06-admin-hotspot-map.jpg)
+
+---
+
 ## Three-Portal Role Architecture
 
 ### 1. Citizen Portal (`/`) — Zero Login Required
