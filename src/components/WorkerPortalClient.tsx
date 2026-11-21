@@ -337,7 +337,7 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="hidden items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-900 md:inline-flex">
               <ShieldCheck className="h-3.5 w-3.5 text-emerald-700" aria-hidden="true" />
               <span>{crewUnitId} · Authenticated</span>
@@ -346,17 +346,17 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
               type="button"
               onClick={refreshIssues}
               disabled={isRefreshing}
-              className="focus-ring inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+              className="focus-ring inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition-colors duration-150 hover:bg-slate-100 disabled:opacity-60 sm:min-h-[38px]"
             >
               <RefreshCw
-                className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin text-amber-600' : ''}`}
+                className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin text-amber-700' : ''}`}
                 aria-hidden="true"
               />
               <span className="hidden sm:inline">Refresh</span>
             </button>
             <Link
               href="/"
-              className="focus-ring inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50"
+              className="focus-ring inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-800 transition-colors duration-150 hover:bg-slate-50 sm:min-h-[38px]"
             >
               <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
               <span className="hidden sm:inline">Home</span>
@@ -364,7 +364,7 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
             <button
               type="button"
               onClick={handleLogout}
-              className="focus-ring inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
+              className="focus-ring inline-flex min-h-[44px] items-center gap-1.5 rounded-xl bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white transition-colors duration-150 hover:bg-slate-800 sm:min-h-[38px]"
             >
               <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
               <span>Sign Out</span>
@@ -378,17 +378,17 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
           <div
             role="status"
             aria-live="polite"
-            className="flex items-center justify-between gap-3 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-950"
+            className="flex items-center justify-between gap-3 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-950 shadow-sm"
           >
             <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-emerald-700" aria-hidden="true" />
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700" aria-hidden="true" />
               <span>{toastMessage}</span>
             </div>
             <button
               type="button"
               onClick={() => setToastMessage(null)}
               aria-label="Dismiss notification"
-              className="focus-ring rounded p-1 hover:bg-emerald-100"
+              className="focus-ring inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg p-1.5 transition-colors hover:bg-emerald-100 sm:min-h-[32px] sm:min-w-[32px]"
             >
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -406,7 +406,7 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
                 Authorized Municipal Division {lockedDepartment ? '(Locked)' : ''}
               </label>
               {lockedDepartment ? (
-                <div className="mt-1 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs font-bold text-amber-950">
+                <div className="mt-1 flex min-h-[44px] items-center rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs font-bold text-amber-950 sm:min-h-[38px]">
                   {lockedDepartment}
                 </div>
               ) : (
@@ -414,7 +414,7 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
                   id="worker-dept-select"
                   value={selectedDepartment}
                   onChange={(e) => setSelectedDepartment(e.target.value as 'All' | Department)}
-                  className="focus-ring mt-1 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-900 focus:border-blue-500 focus:bg-white"
+                  className="focus-ring mt-1 min-h-[44px] w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-900 transition-colors focus:border-blue-500 focus:bg-white sm:min-h-[38px]"
                 >
                   <option value="All">All Dispatched Divisions</option>
                   {DEPARTMENTS.map((dept) => (
@@ -427,19 +427,19 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
             </div>
 
             <div>
-              <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                 Verified Crew / Team Identity
               </span>
-              <div className="mt-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-900">
+              <div className="mt-1 flex min-h-[44px] items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-900 sm:min-h-[38px]">
                 {crewName}
               </div>
             </div>
 
             <div>
-              <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                 Authorized Crew Unit ID
               </span>
-              <div className="mt-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs font-bold text-blue-800">
+              <div className="mt-1 flex min-h-[44px] items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs font-bold text-blue-800 sm:min-h-[38px]">
                 {crewUnitId}
               </div>
             </div>
@@ -448,28 +448,28 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
 
         {/* Field Crew KPI Strip */}
         <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="rounded-2xl border border-blue-200 bg-blue-50/60 p-4 shadow-sm">
+          <div className="rounded-2xl border border-blue-200 bg-blue-50/60 p-3.5 shadow-sm transition-shadow duration-150 hover:shadow-md sm:p-4">
             <p className="text-[11px] font-semibold uppercase text-blue-800">Active Dispatches</p>
-            <p className="mt-1 text-2xl font-extrabold text-blue-950">{counts.activeDispatches}</p>
+            <p className="mt-1 text-2xl font-extrabold tabular-nums text-blue-950">{counts.activeDispatches}</p>
             <p className="text-[11px] text-blue-800">Awaiting completion photo</p>
           </div>
-          <div className="rounded-2xl border border-red-200 bg-red-50/60 p-4 shadow-sm">
+          <div className="rounded-2xl border border-red-200 bg-red-50/60 p-3.5 shadow-sm transition-shadow duration-150 hover:shadow-md sm:p-4">
             <p className="text-[11px] font-semibold uppercase text-red-800">Rework Requested</p>
-            <p className="mt-1 text-2xl font-extrabold text-red-900">{counts.reworkRequested}</p>
+            <p className="mt-1 text-2xl font-extrabold tabular-nums text-red-900">{counts.reworkRequested}</p>
             <p className="text-[11px] text-red-800">Supervisor feedback pending</p>
           </div>
-          <div className="rounded-2xl border border-violet-200 bg-violet-50/60 p-4 shadow-sm">
+          <div className="rounded-2xl border border-violet-200 bg-violet-50/60 p-3.5 shadow-sm transition-shadow duration-150 hover:shadow-md sm:p-4">
             <p className="text-[11px] font-semibold uppercase text-violet-800">
               Awaiting Admin Review
             </p>
-            <p className="mt-1 text-2xl font-extrabold text-violet-950">{counts.pendingReview}</p>
+            <p className="mt-1 text-2xl font-extrabold tabular-nums text-violet-950">{counts.pendingReview}</p>
             <p className="text-[11px] text-violet-800">Proof photo submitted</p>
           </div>
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 shadow-sm">
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-3.5 shadow-sm transition-shadow duration-150 hover:shadow-md sm:p-4">
             <p className="text-[11px] font-semibold uppercase text-emerald-800">
               Verified &amp; Closed
             </p>
-            <p className="mt-1 text-2xl font-extrabold text-emerald-950">{counts.completed}</p>
+            <p className="mt-1 text-2xl font-extrabold tabular-nums text-emerald-950">{counts.completed}</p>
             <p className="text-[11px] text-emerald-800">Approved by administrator</p>
           </div>
         </section>
@@ -487,7 +487,7 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
             aria-selected={activeTab === 'active'}
             aria-controls="worker-jobs-panel"
             onClick={() => setActiveTab('active')}
-            className={`focus-ring inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold transition ${
+            className={`focus-ring inline-flex min-h-[44px] items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold transition-all duration-150 sm:min-h-[38px] ${
               activeTab === 'active'
                 ? 'bg-slate-900 text-white shadow-sm'
                 : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
@@ -503,7 +503,7 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
             aria-selected={activeTab === 'pending_review'}
             aria-controls="worker-jobs-panel"
             onClick={() => setActiveTab('pending_review')}
-            className={`focus-ring inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold transition ${
+            className={`focus-ring inline-flex min-h-[44px] items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold transition-all duration-150 sm:min-h-[38px] ${
               activeTab === 'pending_review'
                 ? 'bg-violet-700 text-white shadow-sm'
                 : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
@@ -519,7 +519,7 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
             aria-selected={activeTab === 'completed'}
             aria-controls="worker-jobs-panel"
             onClick={() => setActiveTab('completed')}
-            className={`focus-ring inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold transition ${
+            className={`focus-ring inline-flex min-h-[44px] items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold transition-all duration-150 sm:min-h-[38px] ${
               activeTab === 'completed'
                 ? 'bg-emerald-700 text-white shadow-sm'
                 : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
@@ -543,12 +543,14 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
           }
         >
         {visibleJobs.length === 0 ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center">
-            <Landmark className="mx-auto h-8 w-8 text-slate-300" aria-hidden="true" />
-            <p className="mt-2 text-sm font-semibold text-slate-700">
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-white/90 p-10 text-center shadow-sm">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
+              <Landmark className="h-6 w-6" aria-hidden="true" />
+            </div>
+            <p className="mt-3 text-sm font-semibold text-slate-800">
               No jobs in this queue right now.
             </p>
-            <p className="mt-1 text-xs text-slate-600">
+            <p className="mx-auto mt-1 max-w-md text-xs text-slate-600">
               Tickets appear under Active Dispatches once a Municipal Administrator dispatches them
               (Status: In Progress).
             </p>
@@ -563,7 +565,7 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
               return (
                 <article
                   key={issue.id}
-                  className={`flex flex-col justify-between rounded-2xl border bg-white p-5 shadow-sm ${
+                  className={`min-w-0 flex flex-col justify-between rounded-2xl border bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
                     isRejected
                       ? 'border-red-300 ring-1 ring-red-200'
                       : isPending
@@ -573,36 +575,50 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
                 >
                   <div>
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs font-bold text-blue-700">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 font-mono text-xs font-bold text-blue-800">
                           {issue.id}
                         </span>
                         <PriorityBadge priority={issue.priority} />
                         <StatusBadge status={issue.status} />
+                        {isRejected && (
+                          <span className="inline-flex items-center rounded-full border border-red-200 bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-900">
+                            Rework Required
+                          </span>
+                        )}
+                        {isPending && (
+                          <span className="inline-flex items-center rounded-full border border-violet-200 bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-900">
+                            Proof Submitted
+                          </span>
+                        )}
                       </div>
-                      <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-bold text-slate-700">
+                      <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-[11px] font-bold tabular-nums text-slate-700">
                         Urgency {issue.urgencyScore}/100
                       </span>
                     </div>
 
-                    <h2 className="mt-2.5 text-base font-bold text-slate-900">{issue.title}</h2>
-                    <p className="mt-1 text-xs text-slate-600 leading-relaxed">
+                    <h2 className="mt-3 text-base font-bold leading-snug text-slate-900">
+                      {issue.title}
+                    </h2>
+                    <p className="mt-1.5 text-xs leading-relaxed text-slate-600">
                       {issue.description}
                     </p>
 
-                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
-                      <span className="inline-flex items-center gap-1">
-                        <MapPin className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
-                        {issue.location} ({issue.ward.split('—')[0].trim()})
+                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-600">
+                      <span className="inline-flex items-center gap-1.5">
+                        <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
+                        <span>
+                          {issue.location} ({issue.ward.split('—')[0].trim()})
+                        </span>
                       </span>
-                      <span className="inline-flex items-center gap-1">
-                        <Building2 className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
-                        {issue.department}
+                      <span className="inline-flex items-center gap-1.5">
+                        <Building2 className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
+                        <span>{issue.department}</span>
                       </span>
                     </div>
 
                     {/* AI Suggested Remediation Action */}
-                    <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50/60 p-3 text-xs text-blue-950">
+                    <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50/70 p-3 text-xs text-blue-950">
                       <span className="inline-flex items-center gap-1 font-bold text-blue-900">
                         <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
                         Dispatch Instructions
@@ -616,11 +632,11 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
                     {isRejected && verification?.rejectionReason && (
                       <div className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3 text-xs text-red-900">
                         <div className="flex items-center gap-1.5 font-bold">
-                          <AlertTriangle className="h-4 w-4 text-red-600" aria-hidden="true" />
+                          <AlertTriangle className="h-4 w-4 shrink-0 text-red-700" aria-hidden="true" />
                           <span>Supervisor Rework Requested</span>
                         </div>
                         <p className="mt-1">&ldquo;{verification.rejectionReason}&rdquo;</p>
-                        <p className="mt-1 text-[10px] text-red-700">
+                        <p className="mt-1 text-[11px] text-red-800">
                           Reviewed by {verification.reviewedBy}
                         </p>
                       </div>
@@ -629,11 +645,11 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
                     {/* Pending Verification Preview */}
                     {isPending && verification && (
                       <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50/60 p-3 text-xs text-violet-950">
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-wrap items-center justify-between gap-1">
                           <span className="font-bold text-violet-900">
                             Submitted for Admin Verification
                           </span>
-                          <span suppressHydrationWarning className="text-[10px] text-violet-700">
+                          <span suppressHydrationWarning className="text-[11px] text-violet-800">
                             {formatDateTime(verification.submittedAt)}
                           </span>
                         </div>
@@ -672,7 +688,7 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
                       <button
                         type="button"
                         onClick={() => openSubmitModal(issue)}
-                        className="focus-ring inline-flex items-center gap-2 rounded-xl bg-amber-700 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-amber-800"
+                        className="focus-ring inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-amber-700 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition-all duration-150 hover:bg-amber-800 active:scale-[0.98] sm:min-h-[38px] sm:w-auto sm:py-2"
                       >
                         <Camera className="h-4 w-4" aria-hidden="true" />
                         <span>
@@ -701,9 +717,9 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
           aria-labelledby="worker-proof-modal-title"
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
         >
-          <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
-            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
-              <div>
+          <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-6">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+              <div className="min-w-0">
                 <span className="font-mono text-xs font-bold text-blue-700">
                   {submittingIssue.id}
                 </span>
@@ -720,7 +736,7 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
                 type="button"
                 onClick={closeSubmitModal}
                 aria-label="Close proof upload modal"
-                className="focus-ring rounded-lg p-1 text-slate-600 hover:bg-slate-100"
+                className="focus-ring inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg p-1.5 text-slate-600 transition-colors hover:bg-slate-100 sm:min-h-[36px] sm:min-w-[36px]"
               >
                 <X className="h-5 w-5" aria-hidden="true" />
               </button>
@@ -737,7 +753,7 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
                 </div>
               )}
 
-              <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs">
                 <span className="text-slate-600">
                   Submitting as: <strong className="text-slate-900">{crewName}</strong>
                 </span>
@@ -752,7 +768,7 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
                   Completed Work Photo * (PNG, JPEG, or WebP)
                 </label>
                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-600 focus-within:ring-offset-2">
+                  <label className="inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2 text-xs font-semibold text-slate-800 transition-colors duration-150 hover:bg-slate-100 focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-600 focus-within:ring-offset-2 sm:min-h-[38px]">
                     <Upload className="h-3.5 w-3.5" aria-hidden="true" />
                     <span>Upload Photo</span>
                     <input
@@ -772,7 +788,7 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
                         setModalError(null);
                       }
                     }}
-                    className="focus-ring inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800 hover:bg-blue-100"
+                    className="focus-ring inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800 transition-colors duration-150 hover:bg-blue-100 sm:min-h-[38px]"
                   >
                     <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
                     <span>Use Sample Proof Photo</span>
@@ -804,7 +820,7 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
                   value={completionNotes}
                   onChange={(e) => setCompletionNotes(e.target.value)}
                   placeholder="Describe the repair completed, parts replaced, and safety verification performed on site..."
-                  className="focus-ring mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-900 focus:border-blue-500"
+                  className="focus-ring mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-900 transition-colors focus:border-blue-500"
                 />
               </div>
 
@@ -814,18 +830,18 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
                 <strong>Resolved</strong> once the administrator verifies your photo.
               </div>
 
-              <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+              <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-3">
                 <button
                   type="button"
                   onClick={closeSubmitModal}
-                  className="focus-ring rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  className="focus-ring min-h-[44px] rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 transition-colors duration-150 hover:bg-slate-50 sm:min-h-[38px]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="focus-ring inline-flex items-center gap-1.5 rounded-xl bg-amber-700 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-amber-800 disabled:opacity-50"
+                  className="focus-ring inline-flex min-h-[44px] items-center gap-1.5 rounded-xl bg-amber-700 px-5 py-2 text-xs font-semibold text-white shadow-sm transition-all duration-150 hover:bg-amber-800 active:scale-[0.98] disabled:opacity-50 sm:min-h-[38px]"
                 >
                   {isSubmitting ? (
                     <>

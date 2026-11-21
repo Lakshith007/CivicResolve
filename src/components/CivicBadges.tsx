@@ -36,7 +36,7 @@ export function PriorityBadge({ priority }: { priority: IssuePriority }) {
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${current.bg}`}
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-semibold ${current.bg}`}
     >
       {current.icon}
       <span>{priority}</span>
@@ -64,7 +64,7 @@ export function StatusBadge({ status }: { status: IssueStatus }) {
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${current.bg}`}
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-semibold ${current.bg}`}
     >
       {current.icon}
       <span>{status}</span>
@@ -76,13 +76,13 @@ export function EngineBadge({ engine }: { engine: 'gemini-ai' | 'smart-civic-fal
   const isGemini = engine === 'gemini-ai';
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium ${
+      className={`inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-medium ${
         isGemini
           ? 'border-violet-200 bg-violet-50 text-violet-800'
           : 'border-cyan-200 bg-cyan-50 text-cyan-800'
       }`}
     >
-      <Sparkles className="h-3 w-3" aria-hidden="true" />
+      <Sparkles className="h-3 w-3 shrink-0" aria-hidden="true" />
       <span>{isGemini ? 'Gemini AI Analyzed' : 'Smart Civic Triage'}</span>
     </span>
   );

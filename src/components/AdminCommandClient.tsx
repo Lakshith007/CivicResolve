@@ -173,24 +173,24 @@ export function AdminCommandClient({
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Dedicated Administrative Header */}
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b border-slate-200/90 bg-white/95 shadow-sm backdrop-blur-md">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-wrap items-center justify-between gap-3 py-3.5">
+          <div className="flex flex-wrap items-center justify-between gap-3 py-3 sm:py-3.5">
             {/* Brand & Subtitle */}
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-700 text-white shadow-sm">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-700 text-white shadow-sm ring-1 ring-blue-800/20">
                 <Landmark className="h-5 w-5" aria-hidden="true" />
               </div>
-              <div>
-                <div className="flex items-center gap-2">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
                   <h1 className="text-lg font-extrabold tracking-tight text-slate-900">
                     CivicResolve
                   </h1>
-                  <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                  <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
                     Command Center
                   </span>
                 </div>
-                <p className="text-xs text-slate-500">
+                <p className="truncate text-xs text-slate-600">
                   Municipal Operations Command Center · Triage, Dispatch &amp; Audit Control
                 </p>
               </div>
@@ -203,7 +203,7 @@ export function AdminCommandClient({
                 onClick={refreshCommandData}
                 disabled={isRefreshing}
                 title="Refresh live operational metrics"
-                className="focus-ring inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                className="focus-ring inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-60"
               >
                 <RefreshCw
                   className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin text-blue-700' : ''}`}
@@ -222,33 +222,33 @@ export function AdminCommandClient({
                   }}
                   aria-label="Open operational notifications"
                   aria-expanded={notifOpen}
-                  className="focus-ring relative inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white p-2 text-slate-700 hover:bg-slate-50"
+                  className="focus-ring relative inline-flex min-h-[38px] min-w-[38px] items-center justify-center rounded-xl border border-slate-200 bg-white p-2 text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
                 >
                   <Bell className="h-4 w-4" aria-hidden="true" />
                   {urgentNotifications.length > 0 && (
-                    <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
+                    <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white shadow-sm">
                       {urgentNotifications.length}
                     </span>
                   )}
                 </button>
 
                 {notifOpen && (
-                  <div className="absolute right-0 mt-2 w-80 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl">
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div className="absolute right-0 z-40 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xl ring-1 ring-slate-900/5">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
                       <span className="text-xs font-bold text-slate-900">
                         Active Dispatch Alerts ({urgentNotifications.length})
                       </span>
                       <button
                         type="button"
                         onClick={() => setNotifOpen(false)}
-                        className="text-[11px] font-medium text-slate-500 hover:text-slate-800"
+                        className="focus-ring rounded px-1.5 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                       >
                         Close
                       </button>
                     </div>
-                    <div className="mt-2 max-h-72 space-y-1.5 overflow-y-auto">
+                    <div className="mt-2.5 max-h-72 space-y-2 overflow-y-auto">
                       {urgentNotifications.length === 0 ? (
-                        <p className="py-4 text-center text-xs text-slate-500">
+                        <p className="py-5 text-center text-xs text-slate-600">
                           No pending urgent dispatch alerts.
                         </p>
                       ) : (
@@ -260,14 +260,14 @@ export function AdminCommandClient({
                               setSelectedIssueFromHeader(item);
                               setNotifOpen(false);
                             }}
-                            className="w-full rounded-xl border border-slate-100 bg-slate-50/70 p-2.5 text-left transition hover:border-blue-200 hover:bg-blue-50/50"
+                            className="focus-ring w-full rounded-xl border border-slate-200/80 bg-slate-50/70 p-2.5 text-left transition hover:border-blue-200 hover:bg-blue-50/50"
                           >
                             <div className="flex items-center justify-between gap-2">
                               <span className="font-mono text-[11px] font-bold text-blue-700">
                                 {item.id}
                               </span>
                               <span
-                                className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                                className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${
                                   item.priority === 'Critical'
                                     ? 'bg-red-100 text-red-800'
                                     : 'bg-amber-100 text-amber-900'
@@ -277,10 +277,10 @@ export function AdminCommandClient({
                                 {item.priority} · {item.urgencyScore}
                               </span>
                             </div>
-                            <p className="mt-0.5 truncate text-xs font-semibold text-slate-900">
+                            <p className="mt-1 truncate text-xs font-semibold text-slate-900">
                               {item.title}
                             </p>
-                            <p className="truncate text-[11px] text-slate-500">
+                            <p className="mt-0.5 truncate text-[11px] text-slate-600">
                               {item.department} · {item.status}
                             </p>
                           </button>
@@ -300,7 +300,7 @@ export function AdminCommandClient({
                     setNotifOpen(false);
                   }}
                   aria-expanded={profileOpen}
-                  className="focus-ring inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-left hover:bg-slate-100"
+                  className="focus-ring inline-flex min-h-[38px] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-left transition hover:bg-slate-100"
                 >
                   <UserCircle2 className="h-5 w-5 text-blue-700" aria-hidden="true" />
                   <div className="hidden sm:block">
@@ -312,14 +312,14 @@ export function AdminCommandClient({
                       ADMIN · 2FA VERIFIED
                     </p>
                   </div>
-                  <ChevronDown className="h-3.5 w-3.5 text-slate-500" aria-hidden="true" />
+                  <ChevronDown className="h-3.5 w-3.5 text-slate-600" aria-hidden="true" />
                 </button>
 
                 {profileOpen && (
-                  <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl">
+                  <div className="absolute right-0 z-40 mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xl ring-1 ring-slate-900/5">
                     <div className="border-b border-slate-100 pb-2.5">
                       <p className="text-xs font-bold text-slate-900">{adminUser.name}</p>
-                      <p className="text-[11px] text-slate-500">{adminUser.email}</p>
+                      <p className="text-[11px] text-slate-600">{adminUser.email}</p>
                       <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800 ring-1 ring-emerald-200">
                         <ShieldCheck className="h-3 w-3" aria-hidden="true" />
                         Role: {adminUser.role} (2FA Active)
@@ -329,15 +329,15 @@ export function AdminCommandClient({
                     <div className="mt-2 space-y-1">
                       <Link
                         href="/"
-                        className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                        className="focus-ring flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
                       >
                         <span>Open Public Citizen Portal</span>
-                        <ExternalLink className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                        <ExternalLink className="h-3.5 w-3.5 text-slate-500" aria-hidden="true" />
                       </Link>
                       <button
                         type="button"
                         onClick={handleLogout}
-                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"
+                        className="focus-ring flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-50"
                       >
                         <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
                         <span>Secure Sign Out</span>
@@ -352,7 +352,7 @@ export function AdminCommandClient({
           {/* Dedicated Administrator Navigation Tabs */}
           <nav
             aria-label="Municipal Operations Command Center navigation"
-            className="-mb-px flex gap-1 overflow-x-auto pb-0.5"
+            className="-mb-px flex gap-1 overflow-x-auto border-t border-slate-100 pt-1 pb-0.5 sm:border-t-0 sm:pt-0"
           >
             {ADMIN_NAV_ITEMS.map((item) => {
               const Icon = item.icon;
@@ -363,21 +363,29 @@ export function AdminCommandClient({
                   type="button"
                   onClick={() => setActiveSection(item.key)}
                   aria-current={isActive ? 'page' : undefined}
-                  className={`focus-ring inline-flex shrink-0 items-center gap-1.5 border-b-2 px-3.5 py-2.5 text-xs font-semibold transition ${
+                  className={`focus-ring inline-flex min-h-[42px] shrink-0 items-center gap-1.5 rounded-t-lg border-b-2 px-3.5 py-2.5 text-xs font-semibold transition ${
                     isActive
-                      ? 'border-blue-700 text-blue-700'
-                      : 'border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-900'
+                      ? 'border-blue-700 bg-blue-50/50 text-blue-800'
+                      : 'border-transparent text-slate-600 hover:border-slate-300 hover:bg-slate-50/70 hover:text-slate-900'
                   }`}
                 >
                   <Icon className="h-3.5 w-3.5" aria-hidden="true" />
                   <span>{item.label}</span>
                   {item.key === 'complaints' && (
-                    <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
+                    <span
+                      className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${
+                        isActive ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-700'
+                      }`}
+                    >
                       {issues.filter((i) => i.status !== 'Resolved').length}
                     </span>
                   )}
                   {item.key === 'audit' && (
-                    <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
+                    <span
+                      className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${
+                        isActive ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-700'
+                      }`}
+                    >
                       {auditLogs.length}
                     </span>
                   )}

@@ -459,76 +459,98 @@ export function AdminDashboard({
 
   const renderKpiCards = () => (
     <section aria-label="Municipal performance KPIs" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex items-center justify-between">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+      <div className="flex flex-col justify-between rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
             Active Complaints
           </p>
-          <Activity className="h-4 w-4 text-blue-700" aria-hidden="true" />
+          <Activity className="h-4 w-4 shrink-0 text-blue-700" aria-hidden="true" />
         </div>
-        <p className="mt-2 text-2xl font-extrabold text-slate-900">{kpis.activeOpen}</p>
-        <p className="mt-0.5 text-[11px] text-slate-500">
-          Total logged: {kpis.total} · Avg Urgency: {stats.averageUrgency}/100
-        </p>
+        <div className="mt-2.5">
+          <p className="text-2xl font-extrabold tracking-tight text-slate-900 tabular-nums">
+            {kpis.activeOpen}
+          </p>
+          <p className="mt-1 text-[11px] leading-snug text-slate-600">
+            Total logged: {kpis.total} · Avg Urgency: {stats.averageUrgency}/100
+          </p>
+        </div>
       </div>
 
-      <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4 shadow-sm">
-        <div className="flex items-center justify-between">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-800">
+      <div className="flex flex-col justify-between rounded-2xl border border-amber-200/90 bg-amber-50/50 p-4 shadow-sm transition-shadow hover:shadow-md">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-900">
             Awaiting Dispatch
           </p>
-          <Clock className="h-4 w-4 text-amber-700" aria-hidden="true" />
+          <Clock className="h-4 w-4 shrink-0 text-amber-700" aria-hidden="true" />
         </div>
-        <p className="mt-2 text-2xl font-extrabold text-amber-950">{kpis.awaitingDispatch}</p>
-        <p className="mt-0.5 text-[11px] text-amber-800">Requires crew assignment</p>
+        <div className="mt-2.5">
+          <p className="text-2xl font-extrabold tracking-tight text-amber-950 tabular-nums">
+            {kpis.awaitingDispatch}
+          </p>
+          <p className="mt-1 text-[11px] leading-snug text-amber-900">Requires crew assignment</p>
+        </div>
       </div>
 
-      <div className="rounded-2xl border border-blue-200 bg-blue-50/50 p-4 shadow-sm">
-        <div className="flex items-center justify-between">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-800">
+      <div className="flex flex-col justify-between rounded-2xl border border-blue-200/90 bg-blue-50/50 p-4 shadow-sm transition-shadow hover:shadow-md">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-900">
             In Progress
           </p>
-          <Send className="h-4 w-4 text-blue-700" aria-hidden="true" />
+          <Send className="h-4 w-4 shrink-0 text-blue-700" aria-hidden="true" />
         </div>
-        <p className="mt-2 text-2xl font-extrabold text-blue-950">{kpis.inProgress}</p>
-        <p className="mt-0.5 text-[11px] text-blue-800">Active field operations</p>
+        <div className="mt-2.5">
+          <p className="text-2xl font-extrabold tracking-tight text-blue-950 tabular-nums">
+            {kpis.inProgress}
+          </p>
+          <p className="mt-1 text-[11px] leading-snug text-blue-900">Active field operations</p>
+        </div>
       </div>
 
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-sm">
-        <div className="flex items-center justify-between">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800">
+      <div className="flex flex-col justify-between rounded-2xl border border-emerald-200/90 bg-emerald-50/50 p-4 shadow-sm transition-shadow hover:shadow-md">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-900">
             Resolved
           </p>
-          <CheckCircle2 className="h-4 w-4 text-emerald-700" aria-hidden="true" />
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700" aria-hidden="true" />
         </div>
-        <p className="mt-2 text-2xl font-extrabold text-emerald-950">{kpis.resolved}</p>
-        <p className="mt-0.5 text-[11px] text-emerald-800">{kpis.resolutionRate}% closure rate</p>
+        <div className="mt-2.5">
+          <p className="text-2xl font-extrabold tracking-tight text-emerald-950 tabular-nums">
+            {kpis.resolved}
+          </p>
+          <p className="mt-1 text-[11px] leading-snug text-emerald-900">{kpis.resolutionRate}% closure rate</p>
+        </div>
       </div>
 
-      <div className="rounded-2xl border border-red-200 bg-red-50/60 p-4 shadow-sm">
-        <div className="flex items-center justify-between">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-red-800">
+      <div className="flex flex-col justify-between rounded-2xl border border-red-200/90 bg-red-50/60 p-4 shadow-sm transition-shadow hover:shadow-md">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-red-900">
             Critical Active
           </p>
-          <AlertTriangle className="h-4 w-4 text-red-700" aria-hidden="true" />
+          <AlertTriangle className="h-4 w-4 shrink-0 text-red-700" aria-hidden="true" />
         </div>
-        <p className="mt-2 text-2xl font-extrabold text-red-900">{kpis.criticalActive}</p>
-        <p className="mt-0.5 text-[11px] text-red-800">Immediate SLA escalation</p>
+        <div className="mt-2.5">
+          <p className="text-2xl font-extrabold tracking-tight text-red-950 tabular-nums">
+            {kpis.criticalActive}
+          </p>
+          <p className="mt-1 text-[11px] leading-snug text-red-900">Immediate SLA escalation</p>
+        </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex items-center justify-between">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+      <div className="flex flex-col justify-between rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
             Avg Resolution
           </p>
-          <Timer className="h-4 w-4 text-slate-700" aria-hidden="true" />
+          <Timer className="h-4 w-4 shrink-0 text-slate-700" aria-hidden="true" />
         </div>
-        <p className="mt-2 text-2xl font-extrabold text-slate-900">
-          {formatDurationHours(kpis.avgResolutionHours)}
-        </p>
-        <p className="mt-0.5 text-[11px] text-slate-500">
-          Based on {kpis.resolved} resolved ticket{kpis.resolved === 1 ? '' : 's'}
-        </p>
+        <div className="mt-2.5">
+          <p className="text-2xl font-extrabold tracking-tight text-slate-900 tabular-nums">
+            {formatDurationHours(kpis.avgResolutionHours)}
+          </p>
+          <p className="mt-1 text-[11px] leading-snug text-slate-600">
+            Based on {kpis.resolved} resolved ticket{kpis.resolved === 1 ? '' : 's'}
+          </p>
+        </div>
       </div>
     </section>
   );
@@ -567,8 +589,9 @@ export function AdminDashboard({
       </div>
 
       {criticalAlerts.length === 0 ? (
-        <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 text-center text-xs font-medium text-emerald-900">
-          All Critical and High priority civic alerts have been resolved.
+        <div className="mt-4 flex flex-col items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50/60 p-6 text-center text-xs font-medium text-emerald-900">
+          <CheckCircle2 className="mb-1.5 h-5 w-5 text-emerald-700" aria-hidden="true" />
+          <span>All Critical and High priority civic alerts have been resolved.</span>
         </div>
       ) : (
         <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -892,29 +915,35 @@ export function AdminDashboard({
         </div>
 
         {/* Table */}
-        <div className="mt-4 overflow-x-auto">
+        <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200/90">
           <table className="min-w-full divide-y divide-slate-200 text-left text-xs">
-            <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
               <tr>
-                <th className="px-3 py-2.5">Complaint</th>
-                <th className="px-3 py-2.5">AI Score &amp; Priority</th>
-                <th className="px-3 py-2.5">Assigned Department</th>
-                <th className="px-3 py-2.5">Reported</th>
-                <th className="px-3 py-2.5">Status</th>
-                <th className="px-3 py-2.5 text-right">Dispatch Actions</th>
+                <th className="px-3.5 py-3">Complaint</th>
+                <th className="px-3.5 py-3">AI Score &amp; Priority</th>
+                <th className="px-3.5 py-3">Assigned Department</th>
+                <th className="px-3.5 py-3">Reported</th>
+                <th className="px-3.5 py-3">Status</th>
+                <th className="px-3.5 py-3 text-right">Dispatch Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
               {visibleRows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center text-slate-500">
-                    No complaints match the current filter criteria.
+                  <td colSpan={6} className="px-4 py-10 text-center">
+                    <SlidersHorizontal className="mx-auto mb-2 h-5 w-5 text-slate-400" aria-hidden="true" />
+                    <p className="text-xs font-semibold text-slate-700">
+                      No complaints match the current filter criteria.
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-slate-600">
+                      Try clearing your search query or switching to All Tickets.
+                    </p>
                   </td>
                 </tr>
               ) : (
                 visibleRows.map((issue) => (
-                  <tr key={issue.id} className="hover:bg-slate-50/70">
-                    <td className="max-w-xs px-3 py-3">
+                  <tr key={issue.id} className="align-top transition-colors hover:bg-slate-50/80">
+                    <td className="max-w-xs px-3.5 py-3.5">
                       <div className="flex items-center gap-2">
                         <span className="font-mono font-bold text-blue-700">{issue.id}</span>
                         {isIssueOverdue(issue) && (
@@ -923,44 +952,44 @@ export function AdminDashboard({
                           </span>
                         )}
                       </div>
-                      <p className="mt-0.5 font-semibold text-slate-900">{issue.title}</p>
-                      <p className="mt-0.5 line-clamp-1 text-[11px] text-slate-500">
+                      <p className="mt-1 font-semibold leading-snug text-slate-900">{issue.title}</p>
+                      <p className="mt-0.5 line-clamp-1 text-[11px] text-slate-600">
                         {issue.description}
                       </p>
-                      <p className="mt-0.5 text-[11px] text-slate-500">
+                      <p className="mt-1 text-[11px] text-slate-600">
                         {issue.location} · {issue.ward.split('—')[0].trim()}
                       </p>
                     </td>
-                    <td className="px-3 py-3">
-                      <div className="flex flex-col items-start gap-1">
+                    <td className="px-3.5 py-3.5">
+                      <div className="flex flex-col items-start gap-1.5">
                         <PriorityBadge priority={issue.priority} />
-                        <span className="font-semibold text-slate-700">
+                        <span className="font-semibold text-slate-700 tabular-nums">
                           Urgency: {issue.urgencyScore}/100
                         </span>
                       </div>
                     </td>
-                    <td className="px-3 py-3 text-slate-700">
-                      <span className="font-medium">{issue.department}</span>
-                      <span className="block text-[11px] text-slate-500">{issue.category}</span>
+                    <td className="px-3.5 py-3.5 text-slate-700">
+                      <span className="font-medium text-slate-900">{issue.department}</span>
+                      <span className="mt-0.5 block text-[11px] text-slate-600">{issue.category}</span>
                     </td>
-                    <td className="whitespace-nowrap px-3 py-3 text-slate-600">
-                      <span suppressHydrationWarning className="block font-medium">
+                    <td className="whitespace-nowrap px-3.5 py-3.5 text-slate-700">
+                      <span suppressHydrationWarning className="block font-medium tabular-nums">
                         {formatRelativeAge(issue.createdAt)}
                       </span>
-                      <span suppressHydrationWarning className="text-[10px] text-slate-600">
+                      <span suppressHydrationWarning className="mt-0.5 block text-[10px] text-slate-600">
                         {formatShortDate(issue.createdAt)}
                       </span>
                     </td>
-                    <td className="px-3 py-3">
+                    <td className="px-3.5 py-3.5">
                       <StatusBadge status={issue.status} />
                     </td>
-                    <td className="px-3 py-3 text-right">
+                    <td className="px-3.5 py-3.5 text-right">
                       <div className="flex flex-wrap justify-end gap-1.5">
                         {issue.status === 'Reported' && (
                           <button
                             type="button"
                             onClick={() => handleQuickAdvance(issue, 'In Progress')}
-                            className="focus-ring rounded-lg border border-blue-300 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-800 hover:bg-blue-100"
+                            className="focus-ring min-h-[32px] rounded-lg border border-blue-300 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-800 transition hover:bg-blue-100"
                           >
                             Dispatch
                           </button>
@@ -970,21 +999,21 @@ export function AdminDashboard({
                             <button
                               type="button"
                               onClick={() => openTriageModal(issue, 'general')}
-                              className="focus-ring rounded-lg border border-violet-300 bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-900 hover:bg-violet-100"
+                              className="focus-ring min-h-[32px] rounded-lg border border-violet-300 bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-900 transition hover:bg-violet-100"
                             >
                               Verify Proof &amp; Resolve
                             </button>
                           )}
                         {issue.status === 'In Progress' &&
                           issue.fieldVerification?.verificationStatus !== 'Pending Verification' && (
-                            <span className="inline-flex items-center rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-800">
+                            <span className="inline-flex min-h-[32px] items-center rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-900">
                               Awaiting Crew Photo
                             </span>
                           )}
                         <button
                           type="button"
                           onClick={() => openTriageModal(issue, 'general')}
-                          className="focus-ring inline-flex items-center gap-1 rounded-lg bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-slate-800"
+                          className="focus-ring inline-flex min-h-[32px] items-center gap-1 rounded-lg bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-slate-800"
                         >
                           <ClipboardEdit className="h-3 w-3" aria-hidden="true" />
                           <span>Manage</span>
@@ -1067,35 +1096,38 @@ export function AdminDashboard({
         </div>
 
         {visible.length === 0 ? (
-          <p className="mt-4 text-xs text-slate-500">
-            No administrative actions recorded yet in this session. Sign-ins, dispatches, and
-            priority overrides will appear here automatically.
-          </p>
+          <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 p-6 text-center">
+            <FileClock className="mx-auto mb-1.5 h-5 w-5 text-slate-400" aria-hidden="true" />
+            <p className="text-xs font-medium text-slate-700">
+              No administrative actions recorded yet in this session. Sign-ins, dispatches, and
+              priority overrides will appear here automatically.
+            </p>
+          </div>
         ) : (
-          <div className="mt-3 overflow-x-auto">
+          <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200/90">
             <table className="min-w-full divide-y divide-slate-200 text-left text-xs">
-              <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                 <tr>
-                  <th className="px-3 py-2">Timestamp</th>
-                  <th className="px-3 py-2">Administrator</th>
-                  <th className="px-3 py-2">Action</th>
-                  <th className="px-3 py-2">Target</th>
-                  <th className="px-3 py-2">Changes &amp; Override Reason</th>
+                  <th className="px-3.5 py-2.5">Timestamp</th>
+                  <th className="px-3.5 py-2.5">Administrator</th>
+                  <th className="px-3.5 py-2.5">Action</th>
+                  <th className="px-3.5 py-2.5">Target</th>
+                  <th className="px-3.5 py-2.5">Changes &amp; Override Reason</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 bg-white">
                 {visible.map((log) => (
-                  <tr key={log.id} className="hover:bg-slate-50/70">
-                    <td suppressHydrationWarning className="whitespace-nowrap px-3 py-2.5 text-slate-500">
+                  <tr key={log.id} className="align-top transition-colors hover:bg-slate-50/80">
+                    <td suppressHydrationWarning className="whitespace-nowrap px-3.5 py-3 text-slate-600 tabular-nums">
                       {formatDateTime(log.timestamp)}
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-3.5 py-3">
                       <span className="font-semibold text-slate-900">{log.actorEmail}</span>
-                      <span className="block font-mono text-[10px] text-slate-500">
+                      <span className="mt-0.5 block font-mono text-[10px] text-slate-600">
                         ID: {log.actorId}
                       </span>
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-3.5 py-3">
                       <span
                         className={`inline-block rounded-md px-2 py-0.5 font-mono text-[10px] font-bold ${
                           log.action.includes('OVERRIDE')
@@ -1108,10 +1140,10 @@ export function AdminDashboard({
                         {log.action}
                       </span>
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2.5 font-mono font-bold text-blue-700">
+                    <td className="whitespace-nowrap px-3.5 py-3 font-mono font-bold text-blue-700">
                       {log.targetTicketId}
                     </td>
-                    <td className="px-3 py-2.5 text-slate-700">
+                    <td className="px-3.5 py-3 text-slate-700">
                       {log.previousValues && log.updatedValues && (
                         <div className="flex flex-wrap gap-1.5 text-[11px]">
                           {log.previousValues.status !== log.updatedValues.status && (
@@ -1206,30 +1238,30 @@ export function AdminDashboard({
               <ClipboardCheck className="h-4 w-4 text-blue-700" aria-hidden="true" />
               <span>Department Turnaround Summary</span>
             </h2>
-            <p className="mt-0.5 text-xs text-slate-500">
+            <p className="mt-0.5 text-xs text-slate-600">
               Resolved volume &amp; average closure time per municipal division
             </p>
-            <div className="mt-4 overflow-x-auto">
+            <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200/90">
               <table className="min-w-full divide-y divide-slate-200 text-left text-xs">
-                <thead className="bg-slate-50 text-[11px] font-semibold text-slate-500">
+                <thead className="bg-slate-50 text-[11px] font-semibold text-slate-600">
                   <tr>
-                    <th className="px-2.5 py-2">Division</th>
-                    <th className="px-2.5 py-2 text-center">Resolved</th>
-                    <th className="px-2.5 py-2 text-center">Overdue</th>
-                    <th className="px-2.5 py-2 text-right">Avg Time</th>
+                    <th className="px-3 py-2.5">Division</th>
+                    <th className="px-3 py-2.5 text-center">Resolved</th>
+                    <th className="px-3 py-2.5 text-center">Overdue</th>
+                    <th className="px-3 py-2.5 text-right">Avg Time</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-100 bg-white">
                   {departmentMetrics.map((m) => (
-                    <tr key={m.department}>
-                      <td className="px-2.5 py-2 font-medium text-slate-800">{m.department}</td>
-                      <td className="px-2.5 py-2 text-center font-bold text-emerald-700">
+                    <tr key={m.department} className="transition-colors hover:bg-slate-50/70">
+                      <td className="px-3 py-2.5 font-medium text-slate-800">{m.department}</td>
+                      <td className="px-3 py-2.5 text-center font-bold text-emerald-700 tabular-nums">
                         {m.resolved}/{m.total}
                       </td>
-                      <td className="px-2.5 py-2 text-center font-bold text-red-700">
+                      <td className="px-3 py-2.5 text-center font-bold text-red-700 tabular-nums">
                         {m.overdue}
                       </td>
-                      <td className="px-2.5 py-2 text-right font-mono text-slate-700">
+                      <td className="px-3 py-2.5 text-right font-mono text-slate-700 tabular-nums">
                         {formatDurationHours(m.avgResHours)}
                       </td>
                     </tr>
@@ -1249,7 +1281,10 @@ export function AdminDashboard({
             Completed municipal work orders with official closure notes and uploaded evidence
           </p>
           {resolvedIssues.length === 0 ? (
-            <p className="mt-4 text-xs text-slate-500">No resolved complaints recorded yet.</p>
+            <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 p-6 text-center">
+              <CheckCircle2 className="mx-auto mb-1.5 h-5 w-5 text-slate-400" aria-hidden="true" />
+              <p className="text-xs font-medium text-slate-700">No resolved complaints recorded yet.</p>
+            </div>
           ) : (
             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
               {resolvedIssues.map((item) => (
@@ -1429,11 +1464,11 @@ export function AdminDashboard({
           role="dialog"
           aria-modal="true"
           aria-labelledby="triage-modal-title"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/65 p-3 backdrop-blur-sm sm:p-4"
         >
-          <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-3">
-              <div>
+          <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-6">
+            <div className="sticky top-0 z-10 -mx-5 -mt-5 mb-5 flex items-start justify-between gap-4 border-b border-slate-100 bg-white/95 px-5 pt-5 pb-3.5 backdrop-blur sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-6">
+              <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-xs font-bold text-blue-700">
                     {editingIssue.id}
@@ -1441,10 +1476,10 @@ export function AdminDashboard({
                   <PriorityBadge priority={editingIssue.priority} />
                   <StatusBadge status={editingIssue.status} />
                 </div>
-                <h3 id="triage-modal-title" className="mt-1 text-base font-bold text-slate-900">
+                <h3 id="triage-modal-title" className="mt-1.5 text-base font-bold leading-snug text-slate-900">
                   {editingIssue.title}
                 </h3>
-                <p suppressHydrationWarning className="mt-0.5 text-xs text-slate-500">
+                <p suppressHydrationWarning className="mt-0.5 text-xs text-slate-600">
                   {editingIssue.location} · {editingIssue.ward} · Reported{' '}
                   {formatDateTime(editingIssue.createdAt)}
                 </p>
@@ -1454,56 +1489,67 @@ export function AdminDashboard({
                 type="button"
                 onClick={closeTriageModal}
                 aria-label="Close complaint triage dialog"
-                className="focus-ring rounded-lg p-1 text-slate-600 hover:bg-slate-100"
+                className="focus-ring shrink-0 rounded-lg p-1.5 text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
               >
                 <X className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
 
             {/* Complaint Context & Gemini AI Summary */}
-            <div className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-xs">
-              <p className="text-slate-800 leading-relaxed">{editingIssue.description}</p>
-              <div className="rounded-lg border border-violet-200 bg-violet-50/70 p-2.5 text-violet-950">
-                <div className="flex items-center justify-between">
-                  <span className="inline-flex items-center gap-1 font-bold text-violet-900">
+            <div className="space-y-3.5 rounded-xl border border-slate-200 bg-slate-50/90 p-4 text-xs">
+              <p className="leading-relaxed text-slate-800">{editingIssue.description}</p>
+              <div className="rounded-xl border border-violet-200 bg-violet-50/80 p-3 text-violet-950">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1.5 font-bold text-violet-900">
                     <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
                     Gemini AI Triage ({editingIssue.urgencyScore}/100)
                   </span>
-                  <span className="text-[11px] font-semibold">
+                  <span className="rounded-md bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-900">
                     SLA: {editingIssue.aiAnalysis.estimatedResolutionSla}
                   </span>
                 </div>
-                <p className="mt-1">{editingIssue.aiAnalysis.aiSummary}</p>
-                <p className="mt-1 text-[11px] text-violet-900/90">
+                <p className="mt-1.5 leading-relaxed">{editingIssue.aiAnalysis.aiSummary}</p>
+                <p className="mt-1.5 text-[11px] leading-relaxed text-violet-900">
                   <strong>Recommended Action:</strong> {editingIssue.aiAnalysis.suggestedAction}
                 </p>
               </div>
               {(editingIssue.imageUrl || editingIssue.fieldVerification) && (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {editingIssue.imageUrl && (
-                    <div>
-                      <span className="mb-1 block text-[11px] font-semibold text-slate-600">
-                        Before · Citizen Reported Photo
-                      </span>
+                  <div className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-xs">
+                    <span className="mb-2 inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-700">
+                      Before · Citizen Reported Photo
+                    </span>
+                    {editingIssue.imageUrl ? (
                       <img
                         src={editingIssue.imageUrl}
                         alt="Citizen submitted evidence"
-                        className="h-40 w-full rounded-lg border border-slate-200 object-cover"
+                        className="h-44 w-full rounded-lg border border-slate-200 bg-slate-100 object-cover"
                       />
-                    </div>
-                  )}
-                  {editingIssue.fieldVerification?.completionPhotoUrl && (
-                    <div>
-                      <span className="mb-1 block text-[11px] font-semibold text-violet-800">
-                        After · Field Crew Proof ({editingIssue.fieldVerification.crewUnitId})
-                      </span>
+                    ) : (
+                      <div className="flex h-44 w-full items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-[11px] text-slate-600">
+                        No citizen photo attached
+                      </div>
+                    )}
+                  </div>
+                  <div className="rounded-xl border border-violet-200 bg-white p-2.5 shadow-xs">
+                    <span className="mb-2 inline-flex items-center rounded-md bg-violet-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-900">
+                      After · Field Crew Proof
+                      {editingIssue.fieldVerification?.crewUnitId
+                        ? ` (${editingIssue.fieldVerification.crewUnitId})`
+                        : ''}
+                    </span>
+                    {editingIssue.fieldVerification?.completionPhotoUrl ? (
                       <img
                         src={editingIssue.fieldVerification.completionPhotoUrl}
                         alt="Field crew completed work proof"
-                        className="h-40 w-full rounded-lg border-2 border-violet-300 object-cover"
+                        className="h-44 w-full rounded-lg border-2 border-violet-300 bg-slate-100 object-cover"
                       />
-                    </div>
-                  )}
+                    ) : (
+                      <div className="flex h-44 w-full items-center justify-center rounded-lg border border-dashed border-violet-200 bg-violet-50/40 px-3 text-center text-[11px] text-slate-600">
+                        Awaiting field crew completion photo
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -1779,18 +1825,18 @@ export function AdminDashboard({
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-4">
+              <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-4">
                 <button
                   type="button"
                   onClick={closeTriageModal}
-                  className="focus-ring rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  className="focus-ring min-h-[40px] rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="focus-ring inline-flex items-center gap-1.5 rounded-xl bg-blue-700 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-800 disabled:opacity-50"
+                  className="focus-ring inline-flex min-h-[40px] items-center gap-1.5 rounded-xl bg-blue-700 px-5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-800 disabled:opacity-50"
                 >
                   {isSaving ? (
                     <>

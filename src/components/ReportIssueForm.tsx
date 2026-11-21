@@ -426,16 +426,16 @@ export function ReportIssueForm({
       {/* 1-Click Demo Presets */}
       <section
         aria-label="Quick demo complaint presets"
-        className="rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-4 shadow-sm"
+        className="rounded-2xl border border-blue-200/90 bg-gradient-to-r from-blue-50/90 to-indigo-50/80 p-4 shadow-sm sm:p-5"
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-blue-700" aria-hidden="true" />
+            <Sparkles className="h-4 w-4 shrink-0 text-blue-700" aria-hidden="true" />
             <h2 className="text-sm font-semibold text-blue-950">
               1-Click Demo Scenarios (Pre-fill &amp; Test AI Classification)
             </h2>
           </div>
-          <span className="text-xs text-blue-700">Click any scenario to auto-fill</span>
+          <span className="text-xs font-medium text-blue-800">Click any scenario to auto-fill</span>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           {DEMO_PRESETS.map((preset) => (
@@ -443,7 +443,7 @@ export function ReportIssueForm({
               key={preset.label}
               type="button"
               onClick={() => applyPreset(preset)}
-              className="focus-ring rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-900 shadow-sm transition hover:border-blue-400 hover:bg-blue-50"
+              className="focus-ring min-h-[38px] rounded-xl border border-blue-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-900 shadow-sm transition hover:border-blue-400 hover:bg-blue-50"
             >
               {preset.label}
             </button>
@@ -498,12 +498,12 @@ export function ReportIssueForm({
         {/* Citizen Report Form */}
         <form
           onSubmit={handleSubmit}
-          className="min-w-0 space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-7"
+          className="min-w-0 space-y-5 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm sm:p-6 lg:col-span-7"
           noValidate
         >
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">Report a Civic Issue</h2>
-            <p className="mt-1 text-sm text-slate-600">
+          <div className="border-b border-slate-100 pb-4">
+            <h2 className="text-lg font-bold tracking-tight text-slate-900">Report a Civic Issue</h2>
+            <p className="mt-1 text-sm leading-relaxed text-slate-600">
               Describe the problem below. Google Gemini AI will automatically detect the category,
               urgency level, and responsible municipal department.
             </p>
@@ -519,43 +519,58 @@ export function ReportIssueForm({
             </div>
           )}
 
-          <div>
-            <label htmlFor="issue-title" className="block text-sm font-semibold text-slate-800">
-              Issue Title <span className="text-red-600">*</span>
-            </label>
-            <input
-              id="issue-title"
-              type="text"
-              required
-              value={title}
-              onChange={(e) => {
-                setTitle(e.target.value);
-                setAnalysis(null);
-              }}
-              placeholder="e.g., Large pothole near Main Market bus stop"
-              className="focus-ring mt-1.5 w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400"
-            />
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-600">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-[11px] font-extrabold text-blue-800">
+                1
+              </span>
+              <span>Issue Summary</span>
+            </div>
+
+            <div>
+              <label htmlFor="issue-title" className="block text-sm font-semibold text-slate-800">
+                Issue Title <span className="text-red-600">*</span>
+              </label>
+              <input
+                id="issue-title"
+                type="text"
+                required
+                value={title}
+                onChange={(e) => {
+                  setTitle(e.target.value);
+                  setAnalysis(null);
+                }}
+                placeholder="e.g., Large pothole near Main Market bus stop"
+                className="focus-ring mt-1.5 w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 transition placeholder:text-slate-500"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="issue-description" className="block text-sm font-semibold text-slate-800">
+                Detailed Description <span className="text-red-600">*</span>
+              </label>
+              <textarea
+                id="issue-description"
+                required
+                rows={4}
+                value={description}
+                onChange={(e) => {
+                  setDescription(e.target.value);
+                  setAnalysis(null);
+                }}
+                placeholder="Describe what happened, how long it has persisted, and any safety risks to pedestrians, vehicles, or nearby facilities..."
+                className="focus-ring mt-1.5 w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 transition placeholder:text-slate-500"
+              />
+            </div>
           </div>
 
-          <div>
-            <label htmlFor="issue-description" className="block text-sm font-semibold text-slate-800">
-              Detailed Description <span className="text-red-600">*</span>
-            </label>
-            <textarea
-              id="issue-description"
-              required
-              rows={4}
-              value={description}
-              onChange={(e) => {
-                setDescription(e.target.value);
-                setAnalysis(null);
-              }}
-              placeholder="Describe what happened, how long it has persisted, and any safety risks to pedestrians, vehicles, or nearby facilities..."
-              className="focus-ring mt-1.5 w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400"
-            />
-          </div>
-
-          <div className="space-y-2.5 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+          <div className="space-y-3 rounded-2xl border border-slate-200/90 bg-slate-50/70 p-4">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-600">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-[11px] font-extrabold text-blue-800">
+                2
+              </span>
+              <span>Location &amp; Coordinates</span>
+            </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <label htmlFor="issue-location" className="block text-sm font-semibold text-slate-800">
                 Street / Landmark Location <span className="text-red-600">*</span>
@@ -565,7 +580,7 @@ export function ReportIssueForm({
                   type="button"
                   onClick={() => setShowMapPicker((prev) => !prev)}
                   aria-expanded={showMapPicker}
-                  className={`focus-ring inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold shadow-sm transition ${
+                  className={`focus-ring inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold shadow-sm transition ${
                     showMapPicker
                       ? 'border-blue-600 bg-blue-50 text-blue-800'
                       : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-100'
@@ -578,7 +593,7 @@ export function ReportIssueForm({
                   type="button"
                   onClick={handleDetectGps}
                   disabled={isLocating}
-                  className="focus-ring inline-flex items-center gap-1.5 rounded-xl bg-blue-700 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-800 disabled:opacity-60"
+                  className="focus-ring inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-blue-300 bg-blue-50 px-3.5 py-1.5 text-xs font-semibold text-blue-900 shadow-sm transition hover:border-blue-400 hover:bg-blue-100 disabled:opacity-60"
                 >
                   {isLocating ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
@@ -592,7 +607,7 @@ export function ReportIssueForm({
 
             <div className="relative">
               <MapPin
-                className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400"
+                className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-500"
                 aria-hidden="true"
               />
               <input
@@ -602,7 +617,7 @@ export function ReportIssueForm({
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 placeholder="Click 'Pick on Map', 'Detect My GPS', or type street / landmark manually..."
-                className="focus-ring w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400"
+                className="focus-ring w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 transition placeholder:text-slate-500"
               />
             </div>
 
@@ -667,53 +682,62 @@ export function ReportIssueForm({
             )}
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="issue-category" className="block text-sm font-semibold text-slate-800">
-                Category (Optional)
-              </label>
-              <select
-                id="issue-category"
-                value={userCategory}
-                onChange={(e) => setUserCategory(e.target.value)}
-                className="focus-ring mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900"
-              >
-                <option value="auto">Auto-Detect with Gemini AI (Recommended)</option>
-                {ISSUE_CATEGORIES.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
+          <div className="space-y-4 pt-1">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-600">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-[11px] font-extrabold text-blue-800">
+                3
+              </span>
+              <span>Category, Contact &amp; Evidence</span>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="min-w-0">
+                <label htmlFor="issue-category" className="block text-sm font-semibold text-slate-800">
+                  Category (Optional)
+                </label>
+                <select
+                  id="issue-category"
+                  value={userCategory}
+                  onChange={(e) => setUserCategory(e.target.value)}
+                  className="focus-ring mt-1.5 w-full truncate rounded-xl border border-slate-300 bg-white py-2.5 pl-3 pr-8 text-xs font-medium text-slate-900 sm:text-sm"
+                >
+                  <option value="auto">Auto-Detect with Gemini AI (Recommended)</option>
+                  {ISSUE_CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="min-w-0">
+                <label htmlFor="reporter-name" className="block text-sm font-semibold text-slate-800">
+                  Your Name (Optional)
+                </label>
+                <input
+                  id="reporter-name"
+                  type="text"
+                  value={reporterName}
+                  onChange={(e) => setReporterName(e.target.value)}
+                  placeholder="Concerned Citizen"
+                  className="focus-ring mt-1.5 w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-500"
+                />
+              </div>
             </div>
 
             <div>
-              <label htmlFor="reporter-name" className="block text-sm font-semibold text-slate-800">
-                Your Name (Optional)
+              <label htmlFor="reporter-contact" className="block text-sm font-semibold text-slate-800">
+                Email or Phone for Updates (Optional)
               </label>
               <input
-                id="reporter-name"
+                id="reporter-contact"
                 type="text"
-                value={reporterName}
-                onChange={(e) => setReporterName(e.target.value)}
-                placeholder="Concerned Citizen"
-                className="focus-ring mt-1.5 w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400"
+                value={reporterContact}
+                onChange={(e) => setReporterContact(e.target.value)}
+                placeholder="citizen@example.com or +91 98xxx xxxxx"
+                className="focus-ring mt-1.5 w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-500"
               />
             </div>
-          </div>
-
-          <div>
-            <label htmlFor="reporter-contact" className="block text-sm font-semibold text-slate-800">
-              Email or Phone for Updates (Optional)
-            </label>
-            <input
-              id="reporter-contact"
-              type="text"
-              value={reporterContact}
-              onChange={(e) => setReporterContact(e.target.value)}
-              placeholder="citizen@example.com or +91 98xxx xxxxx"
-              className="focus-ring mt-1.5 w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400"
-            />
           </div>
 
           {/* Photo Attachment */}
@@ -724,7 +748,7 @@ export function ReportIssueForm({
             <div className="mt-1.5 flex flex-wrap items-center gap-3">
               <label
                 htmlFor="issue-photo-upload"
-                className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-2.5 text-xs font-semibold text-slate-700 transition hover:border-blue-400 hover:bg-blue-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-600 focus-within:ring-offset-2"
+                className="inline-flex min-h-[42px] cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-2.5 text-xs font-semibold text-slate-700 transition hover:border-blue-400 hover:bg-blue-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-600 focus-within:ring-offset-2"
               >
                 <Upload className="h-4 w-4 text-blue-600" aria-hidden="true" />
                 <span>Upload Photo</span>
@@ -743,9 +767,9 @@ export function ReportIssueForm({
                   const png = createSamplePngDataUri('Road Damage Evidence #01', '#f59e0b');
                   if (png) setImageUrl(png);
                 }}
-                className="focus-ring inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                className="focus-ring inline-flex min-h-[42px] items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
               >
-                <Camera className="h-3.5 w-3.5 text-slate-500" aria-hidden="true" />
+                <Camera className="h-3.5 w-3.5 text-slate-600" aria-hidden="true" />
                 <span>Attach Sample Photo</span>
               </button>
             </div>
@@ -774,12 +798,12 @@ export function ReportIssueForm({
               type="button"
               onClick={handleAnalyze}
               disabled={isAnalyzing || isSubmitting}
-              className="focus-ring inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-blue-600 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800 transition hover:bg-blue-100 disabled:opacity-60"
+              className="focus-ring inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl border border-violet-300 bg-violet-50 px-4 py-3 text-sm font-semibold text-violet-950 transition hover:border-violet-400 hover:bg-violet-100 disabled:opacity-60"
             >
               {isAnalyzing ? (
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
               ) : (
-                <Sparkles className="h-4 w-4" aria-hidden="true" />
+                <Sparkles className="h-4 w-4 text-violet-700" aria-hidden="true" />
               )}
               <span>{isAnalyzing ? 'Analyzing with Gemini...' : 'Analyze with Gemini AI'}</span>
             </button>
@@ -787,7 +811,7 @@ export function ReportIssueForm({
             <button
               type="submit"
               disabled={isSubmitting || isAnalyzing}
-              className="focus-ring inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-800 disabled:opacity-60"
+              className="focus-ring inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl bg-blue-700 px-5 py-3 text-sm font-semibold text-white shadow-sm shadow-blue-700/20 transition hover:bg-blue-800 disabled:opacity-60"
             >
               {isSubmitting ? (
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -800,10 +824,10 @@ export function ReportIssueForm({
         </form>
 
         {/* Live AI Preview & Duplicate Guard */}
-        <aside className="min-w-0 space-y-5 lg:col-span-5" aria-label="AI Classification Preview">
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <aside className="min-w-0 space-y-5 lg:sticky lg:top-24 lg:col-span-5 lg:self-start" aria-label="AI Classification Preview">
+          <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm sm:p-6">
             <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-4">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2.5">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-100 text-violet-700">
                   <Sparkles className="h-5 w-5" aria-hidden="true" />
                 </div>
@@ -820,12 +844,12 @@ export function ReportIssueForm({
                 <p className="sr-only">Analyzing civic issue details with Gemini AI...</p>
               )}
               {!analysis ? (
-                <div className="py-10 text-center">
-                  <Sparkles className="mx-auto h-10 w-10 text-slate-400" aria-hidden="true" />
-                  <p className="mt-3 text-sm font-medium text-slate-700">
+                <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-9 text-center">
+                  <Sparkles className="mx-auto h-9 w-9 text-violet-400" aria-hidden="true" />
+                  <p className="mt-3 text-sm font-semibold text-slate-800">
                     No AI preview generated yet
                   </p>
-                  <p className="mt-1 text-xs text-slate-600">
+                  <p className="mt-1 text-xs leading-relaxed text-slate-600">
                     Select a 1-click preset or fill out the complaint, then click{' '}
                     <strong>Analyze with Gemini AI</strong> to inspect category, priority, urgency
                     score, and department routing before submitting.
@@ -835,7 +859,7 @@ export function ReportIssueForm({
               <div className="mt-4 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <PriorityBadge priority={analysis.priority} />
-                  <span className="text-xs font-semibold text-slate-600">
+                  <span className="text-xs font-semibold tabular-nums text-slate-600">
                     AI Confidence: {Math.round(analysis.confidence * 100)}%
                   </span>
                 </div>
@@ -844,7 +868,7 @@ export function ReportIssueForm({
                 <div>
                   <div className="flex items-center justify-between text-xs font-semibold">
                     <span className="text-slate-700">Public Urgency Score</span>
-                    <span className="text-slate-900">{analysis.urgencyScore} / 100</span>
+                    <span className="tabular-nums text-slate-900">{analysis.urgencyScore} / 100</span>
                   </div>
                   <div className="mt-1.5 h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
                     <div
