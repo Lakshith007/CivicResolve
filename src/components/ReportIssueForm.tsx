@@ -30,6 +30,7 @@ import {
 } from '@/types/civic';
 import { EngineBadge, PriorityBadge } from '@/components/CivicBadges';
 import { LocationPickerMap } from '@/components/LocationPickerMap';
+import { compressImageFile } from '@/lib/imageCompress';
 
 async function reverseGeocodeCoordinates(
   lat: number,
@@ -312,25 +313,24 @@ export function ReportIssueForm({
     );
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
       setErrorMessage('Only PNG, JPEG, or WebP images are permitted.');
       return;
     }
-    if (file.size > 1_400_000) {
-      setErrorMessage('Please upload an image smaller than 1.4 MB.');
+    if (file.size > 10_000_000) {
+      setErrorMessage('Please upload an image smaller than 10 MB.');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setImageUrl(reader.result);
-        setErrorMessage(null);
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressed = await compressImageFile(file);
+      setImageUrl(compressed);
+      setErrorMessage(null);
+    } catch {
+      setErrorMessage('Unable to process the selected image file.');
+    }
   };
 
   const handleAnalyze = async () => {
@@ -405,6 +405,8 @@ export function ReportIssueForm({
         setDescription('');
         setLocation('');
         setWard('Auto-Detected Municipal Zone');
+        setCoordinates({ lat: 11.0168, lng: 76.9558 });
+        setUserCategory('auto');
         setGpsStatus('idle');
         setGpsAccuracy(null);
         setGpsMessage(null);
@@ -496,7 +498,7 @@ export function ReportIssueForm({
         {/* Citizen Report Form */}
         <form
           onSubmit={handleSubmit}
-          className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-7"
+          className="min-w-0 space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-7"
           noValidate
         >
           <div>
@@ -792,7 +794,7 @@ export function ReportIssueForm({
         </form>
 
         {/* Live AI Preview & Duplicate Guard */}
-        <aside className="space-y-5 lg:col-span-5" aria-label="AI Classification Preview">
+        <aside className="min-w-0 space-y-5 lg:col-span-5" aria-label="AI Classification Preview">
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-4">
               <div className="flex items-center gap-2">

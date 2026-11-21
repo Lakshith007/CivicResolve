@@ -5,6 +5,10 @@ export const metadata: Metadata = {
   title: 'CivicResolve — AI-Powered Civic Issue Reporting & Management',
   description:
     'Report local infrastructure issues, classify urgency with Google Gemini AI, route to municipal departments, and track transparent resolution.',
+  icons: {
+    icon: '/icon.svg',
+    shortcut: '/icon.svg',
+  },
 };
 
 export default function RootLayout({

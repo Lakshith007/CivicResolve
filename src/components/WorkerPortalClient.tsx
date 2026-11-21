@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { DEPARTMENTS, type CivicIssue, type Department, type SessionUser } from '@/types/civic';
 import { PriorityBadge, StatusBadge } from '@/components/CivicBadges';
+import { compressImageFile } from '@/lib/imageCompress';
 
 interface WorkerPortalClientProps {
   initialIssues: CivicIssue[];
@@ -202,25 +203,24 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
     setModalError(null);
   };
 
-  const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
       setModalError('Completion photo must be a PNG, JPEG, or WebP image.');
       return;
     }
-    if (file.size > 1_400_000) {
-      setModalError('Completion photo must be under 1.4 MB.');
+    if (file.size > 10_000_000) {
+      setModalError('Completion photo must be under 10 MB.');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setCompletionPhotoUrl(reader.result);
-        setModalError(null);
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressed = await compressImageFile(file);
+      setCompletionPhotoUrl(compressed);
+      setModalError(null);
+    } catch {
+      setModalError('Unable to process the completion photo.');
+    }
   };
 
   const handleSubmitProof = async (e: React.FormEvent) => {

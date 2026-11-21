@@ -60,11 +60,13 @@ export function AdminHotspotMap({
 
   const availableWards = useMemo(() => {
     const set = new Set<string>();
-    issues.forEach((i) => {
-      if (i.ward) set.add(i.ward);
-    });
+    issues
+      .filter((i) => (showResolved ? true : i.status !== 'Resolved'))
+      .forEach((i) => {
+        if (i.ward) set.add(i.ward);
+      });
     return Array.from(set).sort();
-  }, [issues]);
+  }, [issues, showResolved]);
 
   const filteredIssues = useMemo(() => {
     const now = Date.now();
@@ -364,7 +366,7 @@ export function AdminHotspotMap({
           {mapMode === 'google' ? (
             <CivicGoogleMap
               issues={filteredIssues}
-              selectedIssueId={selectedIssue?.id ?? null}
+              selectedIssueId={selectedId}
               onSelectIssue={(id) => setSelectedId(id)}
               includeResolved={showResolved}
             />

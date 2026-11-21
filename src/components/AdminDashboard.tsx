@@ -104,7 +104,10 @@ function formatShortDate(isoDate: string): string {
 
 function formatDurationHours(hours: number | null): string {
   if (hours === null || !Number.isFinite(hours)) return 'N/A';
-  if (hours < 1) return `${Math.max(1, Math.round(hours * 60))} mins`;
+  if (hours < 1) {
+    const mins = Math.max(1, Math.round(hours * 60));
+    return `${mins} ${mins === 1 ? 'min' : 'mins'}`;
+  }
   if (hours < 48) return `${hours.toFixed(1)} hrs`;
   return `${(hours / 24).toFixed(1)} days`;
 }
@@ -997,6 +1000,11 @@ export function AdminDashboard({
                 <option value="ALL">All Actions</option>
                 <option value="ADMIN_TRIAGE">Triage &amp; Dispatch Updates</option>
                 <option value="PRIORITY_OVERRIDE">Priority Overrides</option>
+                <option value="ADMIN_VERIFY_AND_RESOLVE">Verified Resolutions</option>
+                <option value="ADMIN_REJECT_FIELD_WORK">Rework Requests</option>
+                <option value="WORKER_LOGIN">Crew Sign-Ins</option>
+                <option value="WORKER_PROOF_SUBMITTED">Crew Proof Submissions</option>
+                <option value="WORKER_PLAGIARISM_BLOCKED">Plagiarism Blocks</option>
                 <option value="ADMIN_2FA_LOGIN">Admin 2FA Logins</option>
                 <option value="ADMIN_LOGOUT">Admin Logouts</option>
               </select>

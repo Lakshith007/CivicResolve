@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { analyzeCivicIssueWithGemini, findPotentialDuplicates } from '@/lib/aiClassifier';
 import { checkRateLimit, getClientIp, verifySameOrigin } from '@/lib/authGuards';
-import { getAllIssues } from '@/lib/issueStore';
+import { hydrateIssuesFromFirestore } from '@/lib/issueStore';
 import { isValidImageInput, sanitizeText } from '@/lib/validation';
 
 export async function POST(request: Request) {
@@ -48,6 +48,7 @@ export async function POST(request: Request) {
       userCategory,
     });
 
+    const existingIssues = await hydrateIssuesFromFirestore();
     const duplicates = findPotentialDuplicates(
       {
         title,
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
         location,
         category: analysis.category,
       },
-      getAllIssues()
+      existingIssues
     );
 
     return NextResponse.json({

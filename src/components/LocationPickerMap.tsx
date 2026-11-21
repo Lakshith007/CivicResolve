@@ -237,7 +237,7 @@ export function LocationPickerMap({
       <div ref={containerRef} className="h-full w-full" aria-label="Interactive issue location map" />
 
       {/* Compact Floating Instruction Badge */}
-      <div className="pointer-events-none absolute left-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/95 px-2.5 py-1.5 text-[11px] font-semibold text-slate-800 shadow-sm backdrop-blur-sm">
+      <div className="pointer-events-none absolute bottom-3 left-3 z-10 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/95 px-2.5 py-1.5 text-[11px] font-semibold text-slate-800 shadow-sm backdrop-blur-sm">
         <Navigation className="h-3 w-3 text-blue-700" aria-hidden="true" />
         <span>Click anywhere on the map or drag the pin to select the exact issue spot</span>
       </div>

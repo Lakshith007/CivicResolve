@@ -68,23 +68,35 @@ export function TrackingDashboard({
 
   const filteredIssues = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return issues.filter((issue) => {
-      if (onlyMine && currentUser && issue.reporterUserId !== currentUser.id) return false;
-      if (statusFilter !== 'All' && issue.status !== statusFilter) return false;
-      if (categoryFilter !== 'All' && issue.category !== categoryFilter) return false;
-      if (priorityFilter !== 'All' && issue.priority !== priorityFilter) return false;
-      if (q) {
-        const hay =
-          `${issue.id} ${issue.title} ${issue.description} ${issue.location} ${issue.ward} ${issue.department}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      return true;
-    });
+    return issues
+      .filter((issue) => {
+        if (onlyMine && currentUser && issue.reporterUserId !== currentUser.id) return false;
+        if (statusFilter !== 'All' && issue.status !== statusFilter) return false;
+        if (categoryFilter !== 'All' && issue.category !== categoryFilter) return false;
+        if (priorityFilter !== 'All' && issue.priority !== priorityFilter) return false;
+        if (q) {
+          const hay =
+            `${issue.id} ${issue.title} ${issue.description} ${issue.location} ${issue.ward} ${issue.department}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        const aResolved = a.status === 'Resolved' ? 1 : 0;
+        const bResolved = b.status === 'Resolved' ? 1 : 0;
+        if (aResolved !== bResolved) return aResolved - bResolved;
+        return b.urgencyScore - a.urgencyScore;
+      });
   }, [issues, search, statusFilter, categoryFilter, priorityFilter, onlyMine, currentUser]);
 
   const activeMapIssues = useMemo(
     () => filteredIssues.filter((i) => i.status !== 'Resolved'),
     [filteredIssues]
+  );
+
+  const activeCriticalCount = useMemo(
+    () => issues.filter((i) => i.priority === 'Critical' && i.status !== 'Resolved').length,
+    [issues]
   );
 
   const selectedMapIssue =
@@ -140,7 +152,7 @@ export function TrackingDashboard({
             {stats.averageUrgency}
             <span className="text-sm font-semibold text-amber-800"> / 100</span>
           </p>
-          <p className="mt-0.5 text-xs text-amber-900">{stats.criticalCount} Critical active</p>
+          <p className="mt-0.5 text-xs text-amber-900">{activeCriticalCount} Critical active</p>
         </div>
       </section>
 
@@ -204,7 +216,7 @@ export function TrackingDashboard({
           {mapMode === 'google' ? (
             <CivicGoogleMap
               issues={activeMapIssues}
-              selectedIssueId={selectedMapIssue?.id ?? null}
+              selectedIssueId={selectedMapIssueId}
               onSelectIssue={(id) => {
                 setSelectedMapIssueId(id);
                 setExpandedId(id);
