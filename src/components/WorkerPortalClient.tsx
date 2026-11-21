@@ -13,19 +13,22 @@ import {
   HardHat,
   Landmark,
   Loader2,
+  LogOut,
   MapPin,
   RefreshCw,
   Send,
+  ShieldCheck,
   Sparkles,
   Upload,
   Wrench,
   X,
 } from 'lucide-react';
-import { DEPARTMENTS, type CivicIssue, type Department } from '@/types/civic';
+import { DEPARTMENTS, type CivicIssue, type Department, type SessionUser } from '@/types/civic';
 import { PriorityBadge, StatusBadge } from '@/components/CivicBadges';
 
 interface WorkerPortalClientProps {
   initialIssues: CivicIssue[];
+  workerUser: SessionUser;
 }
 
 type WorkerTab = 'active' | 'pending_review' | 'completed';
@@ -104,13 +107,27 @@ function generateSampleProofPng(ticketId: string, crewUnitId: string): string {
   return canvas.toDataURL('image/png');
 }
 
-export function WorkerPortalClient({ initialIssues }: WorkerPortalClientProps) {
+export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalClientProps) {
+  const lockedDepartment =
+    workerUser.role === 'WORKER' &&
+    workerUser.assignedDepartment &&
+    workerUser.assignedDepartment !== 'ALL'
+      ? workerUser.assignedDepartment
+      : null;
+
   const [issues, setIssues] = useState<CivicIssue[]>(initialIssues);
-  const [selectedDepartment, setSelectedDepartment] = useState<'All' | Department>('All');
+  const [selectedDepartment, setSelectedDepartment] = useState<'All' | Department>(
+    lockedDepartment || 'All'
+  );
   const [activeTab, setActiveTab] = useState<WorkerTab>('active');
-  const [crewName, setCrewName] = useState('Municipal Rapid Response Team');
-  const [crewUnitId, setCrewUnitId] = useState('CREW-01');
+  const crewName = workerUser.name;
+  const crewUnitId = workerUser.crewUnitId || (workerUser.role === 'ADMIN' ? 'ADMIN-FIELD' : 'CREW');
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    window.location.href = '/worker';
+  };
 
   // Proof submission modal state
   const [submittingIssue, setSubmittingIssue] = useState<CivicIssue | null>(null);
@@ -281,6 +298,10 @@ export function WorkerPortalClient({ initialIssues }: WorkerPortalClientProps) {
           </div>
 
           <div className="flex items-center gap-2">
+            <span className="hidden items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-900 md:inline-flex">
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-700" aria-hidden="true" />
+              <span>{crewUnitId} · Authenticated</span>
+            </span>
             <button
               type="button"
               onClick={refreshIssues}
@@ -291,15 +312,23 @@ export function WorkerPortalClient({ initialIssues }: WorkerPortalClientProps) {
                 className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin text-amber-600' : ''}`}
                 aria-hidden="true"
               />
-              <span>Refresh Jobs</span>
+              <span className="hidden sm:inline">Refresh</span>
             </button>
             <Link
               href="/"
-              className="focus-ring inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50"
+              className="focus-ring inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50"
             >
               <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>Role Home</span>
+              <span className="hidden sm:inline">Home</span>
             </Link>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="focus-ring inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
+            >
+              <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Sign Out</span>
+            </button>
           </div>
         </div>
       </header>
@@ -326,7 +355,7 @@ export function WorkerPortalClient({ initialIssues }: WorkerPortalClientProps) {
           </div>
         )}
 
-        {/* Crew Profile & Department Filter Bar */}
+        {/* Authenticated Crew Profile & Division Scope Bar */}
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <div>
@@ -334,55 +363,45 @@ export function WorkerPortalClient({ initialIssues }: WorkerPortalClientProps) {
                 htmlFor="worker-dept-select"
                 className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500"
               >
-                Assigned Municipal Division
+                Authorized Municipal Division {lockedDepartment ? '(Locked)' : ''}
               </label>
-              <select
-                id="worker-dept-select"
-                value={selectedDepartment}
-                onChange={(e) => setSelectedDepartment(e.target.value as 'All' | Department)}
-                className="mt-1 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
-              >
-                <option value="All">All Dispatched Divisions</option>
-                {DEPARTMENTS.map((dept) => (
-                  <option key={dept} value={dept}>
-                    {dept}
-                  </option>
-                ))}
-              </select>
+              {lockedDepartment ? (
+                <div className="mt-1 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs font-bold text-amber-950">
+                  {lockedDepartment}
+                </div>
+              ) : (
+                <select
+                  id="worker-dept-select"
+                  value={selectedDepartment}
+                  onChange={(e) => setSelectedDepartment(e.target.value as 'All' | Department)}
+                  className="mt-1 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
+                >
+                  <option value="All">All Dispatched Divisions</option>
+                  {DEPARTMENTS.map((dept) => (
+                    <option key={dept} value={dept}>
+                      {dept}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div>
-              <label
-                htmlFor="worker-crew-name"
-                className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500"
-              >
-                Field Team / Crew Name
-              </label>
-              <input
-                id="worker-crew-name"
-                type="text"
-                value={crewName}
-                onChange={(e) => setCrewName(e.target.value)}
-                placeholder="e.g. Emergency Linemen Team"
-                className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-900 focus:border-blue-500 focus:outline-none"
-              />
+              <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Verified Crew / Team Identity
+              </span>
+              <div className="mt-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-900">
+                {crewName}
+              </div>
             </div>
 
             <div>
-              <label
-                htmlFor="worker-crew-id"
-                className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500"
-              >
-                Crew Unit ID
-              </label>
-              <input
-                id="worker-crew-id"
-                type="text"
-                value={crewUnitId}
-                onChange={(e) => setCrewUnitId(e.target.value)}
-                placeholder="e.g. CREW-E4"
-                className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 font-mono text-xs font-semibold text-slate-900 focus:border-blue-500 focus:outline-none"
-              />
+              <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Authorized Crew Unit ID
+              </span>
+              <div className="mt-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs font-bold text-blue-800">
+                {crewUnitId}
+              </div>
             </div>
           </div>
         </section>
@@ -649,31 +668,11 @@ export function WorkerPortalClient({ initialIssues }: WorkerPortalClientProps) {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700">
-                    Crew / Team Name *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={crewName}
-                    onChange={(e) => setCrewName(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700">
-                    Crew Unit ID *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={crewUnitId}
-                    onChange={(e) => setCrewUnitId(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 font-mono text-xs text-slate-900 focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
+              <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs">
+                <span className="text-slate-600">
+                  Submitting as: <strong className="text-slate-900">{crewName}</strong>
+                </span>
+                <span className="font-mono font-bold text-blue-800">{crewUnitId}</span>
               </div>
 
               <div>

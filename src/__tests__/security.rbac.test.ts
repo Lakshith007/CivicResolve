@@ -7,6 +7,7 @@ import { GET as adminComplaintsGet } from '@/app/api/admin/complaints/route';
 import { GET as adminAnalyticsGet } from '@/app/api/admin/analytics/route';
 import { GET as issuesGet, POST as issuesPost } from '@/app/api/issues/route';
 import { GET as issueByIdGet, PATCH as issueByIdPatch } from '@/app/api/issues/[id]/route';
+import { POST as workerLoginPost } from '@/app/api/auth/worker-login/route';
 import { POST as workerProofPost } from '@/app/api/worker/submit-proof/route';
 import { resetAuditStoreForTesting } from '@/lib/auditStore';
 import { resetRateLimitsForTesting } from '@/lib/authGuards';
@@ -464,58 +465,101 @@ describe('CivicResolve RBAC & Application Security Verification', () => {
     expect(testAdminAccess.status).toBe(200);
   });
 
-  it('enforces Field Crew photo proof submission and Admin-only verification/approval workflow', async () => {
+  it('enforces Worker RBAC, department scoping, SHA-256 photo plagiarism checks, and Admin-only approval', async () => {
     const validPng =
       'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const secondValidPng =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR42mNk+M9QzwAEjDAGACCKAoE2l1n7AAAAAElFTkSuQmCC';
     const spoofedSvg = 'data:image/svg+xml;base64,PHN2Zz48c2NyaXB0PmFsZXJ0KDEpPC9zY3JpcHQ+PC9zdmc+';
 
-    // 1. Rejects proof on un-dispatched Reported ticket (CR-2026-1002 is Reported)
-    const notDispatched = await workerProofPost(
+    // 1. Unauthenticated submission is strictly blocked -> 401
+    const unauthProof = await workerProofPost(
       makeJsonRequest('http://localhost/api/worker/submit-proof', 'POST', {
-        ticketId: 'CR-2026-1002',
-        crewName: 'Hydraulic Unit',
-        crewUnitId: 'CREW-H2',
-        completionNotes: 'Repaired burst pipe valve.',
+        ticketId: 'CR-2026-1001',
+        completionNotes: 'Unauthorized attempt.',
         completionPhotoUrl: validPng,
       })
     );
-    expect(notDispatched.status).toBe(400);
+    expect(unauthProof.status).toBe(401);
 
-    // 2. Rejects spoofed/SVG image on In Progress ticket (CR-2026-1001 is In Progress)
-    const badPhoto = await workerProofPost(
-      makeJsonRequest('http://localhost/api/worker/submit-proof', 'POST', {
-        ticketId: 'CR-2026-1001',
-        crewName: 'Electrical Crew',
+    // 2. Worker authenticates via Crew Unit ID + Passcode (CREW-E4 = Electrical Division)
+    const workerLoginRes = await workerLoginPost(
+      makeJsonRequest('http://localhost/api/auth/worker-login', 'POST', {
         crewUnitId: 'CREW-E4',
-        completionNotes: 'Isolated wire and replaced fuse box.',
-        completionPhotoUrl: spoofedSvg,
+        passcode: 'Crew@E4!2026',
       })
+    );
+    expect(workerLoginRes.status).toBe(200);
+    const workerCookie = extractCookieValue(workerLoginRes, SESSION_COOKIE_NAME);
+    expect(workerCookie).toBeTruthy();
+
+    // 3. Worker is strictly blocked from Admin APIs -> 403
+    const workerAdminAttempt = await adminComplaintsGet(
+      makeJsonRequest('http://localhost/api/admin/complaints', 'GET', undefined, workerCookie)
+    );
+    expect(workerAdminAttempt.status).toBe(403);
+
+    // 4. Department scoping: Electrical crew CREW-E4 cannot submit proof on Water Works ticket (CR-2026-1002) -> 403
+    const wrongDept = await workerProofPost(
+      makeJsonRequest(
+        'http://localhost/api/worker/submit-proof',
+        'POST',
+        {
+          ticketId: 'CR-2026-1002',
+          completionNotes: 'Trying to submit on another division.',
+          completionPhotoUrl: validPng,
+        },
+        workerCookie
+      )
+    );
+    expect(wrongDept.status).toBe(403);
+
+    // 5. Rejects spoofed/SVG image on own division's In Progress ticket (CR-2026-1001)
+    const badPhoto = await workerProofPost(
+      makeJsonRequest(
+        'http://localhost/api/worker/submit-proof',
+        'POST',
+        {
+          ticketId: 'CR-2026-1001',
+          completionNotes: 'Isolated wire and replaced fuse box.',
+          completionPhotoUrl: spoofedSvg,
+        },
+        workerCookie
+      )
     );
     expect(badPhoto.status).toBe(400);
 
-    // 3. Valid PNG proof submission succeeds, marks Pending Verification, keeps status In Progress
+    // 6. Valid unique PNG proof succeeds, stamps server session CREW-E4 & SHA-256 unique status
     const validProof = await workerProofPost(
-      makeJsonRequest('http://localhost/api/worker/submit-proof', 'POST', {
-        ticketId: 'CR-2026-1001',
-        crewName: 'Electrical Crew',
-        crewUnitId: 'CREW-E4',
-        completionNotes: 'Replaced feeder cable and restored streetlight pole illumination.',
-        completionPhotoUrl: validPng,
-      })
+      makeJsonRequest(
+        'http://localhost/api/worker/submit-proof',
+        'POST',
+        {
+          ticketId: 'CR-2026-1001',
+          completionNotes: 'Replaced feeder cable and restored streetlight pole illumination.',
+          completionPhotoUrl: validPng,
+        },
+        workerCookie
+      )
     );
     expect(validProof.status).toBe(200);
     const proofJson = await validProof.json();
     expect(proofJson.issue.status).toBe('In Progress');
+    expect(proofJson.issue.fieldVerification.crewUnitId).toBe('CREW-E4');
     expect(proofJson.issue.fieldVerification.verificationStatus).toBe('Pending Verification');
+    expect(proofJson.issue.fieldVerification.plagiarismStatus).toBe('Unique (SHA-256 Verified)');
 
-    // 4. Unauthenticated user cannot approve verification -> 401
-    const unauthApprove = await issueByIdPatch(
-      makeJsonRequest('http://localhost/api/issues/CR-2026-1001', 'PATCH', {
-        verificationDecision: 'approve',
-      }),
+    // 7. Worker cannot approve its own work -> 403
+    const workerSelfApprove = await issueByIdPatch(
+      makeJsonRequest(
+        'http://localhost/api/issues/CR-2026-1001',
+        'PATCH',
+        { verificationDecision: 'approve' },
+        workerCookie
+      ),
       { params: { id: 'CR-2026-1001' } }
     );
-    expect(unauthApprove.status).toBe(401);
+    expect(workerSelfApprove.status).toBe(403);
 
     // Authenticate Admin
     const loginRes = await loginPost(
@@ -527,7 +571,58 @@ describe('CivicResolve RBAC & Application Security Verification', () => {
     const adminCookie = extractCookieValue(loginRes, SESSION_COOKIE_NAME);
     expect(adminCookie).toBeTruthy();
 
-    // 5. Admin reject without reason -> 400
+    // 8. Plagiarism check: Reusing validPng on another In Progress ticket (CR-2026-1004) is BLOCKED -> 400
+    const leadLogin = await workerLoginPost(
+      makeJsonRequest('http://localhost/api/auth/worker-login', 'POST', {
+        crewUnitId: 'CREW-LEAD',
+        passcode: 'Crew@Lead!2026',
+      })
+    );
+    const leadCookie = extractCookieValue(leadLogin, SESSION_COOKIE_NAME);
+
+    // Dispatch CR-2026-1002 to In Progress so we can test cross-ticket photo plagiarism
+    await issueByIdPatch(
+      makeJsonRequest(
+        'http://localhost/api/issues/CR-2026-1002',
+        'PATCH',
+        { status: 'In Progress', adminNotes: 'Dispatched hydraulic unit.' },
+        adminCookie
+      ),
+      { params: { id: 'CR-2026-1002' } }
+    );
+
+    const plagiarizedCrossTicket = await workerProofPost(
+      makeJsonRequest(
+        'http://localhost/api/worker/submit-proof',
+        'POST',
+        {
+          ticketId: 'CR-2026-1002',
+          completionNotes: 'Attempting to reuse photo from CR-2026-1001.',
+          completionPhotoUrl: validPng,
+        },
+        leadCookie
+      )
+    );
+    expect(plagiarizedCrossTicket.status).toBe(400);
+    const plagJson = await plagiarizedCrossTicket.json();
+    expect(plagJson.error).toContain('Plagiarism Detected');
+
+    // Submitting a genuinely different PNG on CR-2026-1002 succeeds -> 200
+    const uniqueSecondProof = await workerProofPost(
+      makeJsonRequest(
+        'http://localhost/api/worker/submit-proof',
+        'POST',
+        {
+          ticketId: 'CR-2026-1002',
+          completionNotes: 'Replaced ruptured water main valve and tested pressure.',
+          completionPhotoUrl: secondValidPng,
+        },
+        leadCookie
+      )
+    );
+    expect(uniqueSecondProof.status).toBe(200);
+
+    // 9. Admin reject without reason -> 400; with reason -> 200 & logs ADMIN_REJECT_FIELD_WORK
     const rejectNoReason = await issueByIdPatch(
       makeJsonRequest(
         'http://localhost/api/issues/CR-2026-1001',
@@ -539,7 +634,6 @@ describe('CivicResolve RBAC & Application Security Verification', () => {
     );
     expect(rejectNoReason.status).toBe(400);
 
-    // 6. Admin reject with reason -> 200, keeps In Progress, logs ADMIN_REJECT_FIELD_WORK
     const rejectValid = await issueByIdPatch(
       makeJsonRequest(
         'http://localhost/api/issues/CR-2026-1001',
@@ -557,7 +651,7 @@ describe('CivicResolve RBAC & Application Security Verification', () => {
     expect(rejectJson.issue.status).toBe('In Progress');
     expect(rejectJson.issue.fieldVerification.verificationStatus).toBe('Rejected');
 
-    // 7. Admin approves -> 200, marks Resolved, copies proof to resolutionEvidenceUrl, logs audit
+    // 10. Admin approves -> 200, marks Resolved, copies proof to resolutionEvidenceUrl, logs audit
     const approveRes = await issueByIdPatch(
       makeJsonRequest(
         'http://localhost/api/issues/CR-2026-1001',

@@ -88,6 +88,21 @@ export function requireAdmin(request?: Request): GuardResult {
   return auth;
 }
 
+export function requireWorker(request?: Request): GuardResult {
+  const auth = requireAuth(request);
+  if (!auth.ok) return auth;
+  if (auth.user.role !== 'WORKER' && auth.user.role !== 'ADMIN') {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: 'Forbidden: Authorized municipal field crew credentials are required.' },
+        { status: 403 }
+      ),
+    };
+  }
+  return auth;
+}
+
 /**
  * CSRF origin check: if an Origin header is supplied on a mutating request,
  * verify it matches the target Host header.

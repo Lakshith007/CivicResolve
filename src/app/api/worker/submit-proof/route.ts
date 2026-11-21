@@ -1,12 +1,23 @@
 import { NextResponse } from 'next/server';
-import { checkRateLimit, getClientIp, verifySameOrigin } from '@/lib/authGuards';
+import { recordAuditLog } from '@/lib/auditStore';
+import { checkRateLimit, getClientIp, requireWorker, verifySameOrigin } from '@/lib/authGuards';
 import { syncStatusUpdateToFirestore } from '@/lib/firebase';
-import { getDashboardStats, submitFieldCompletionProof, toPublicIssue } from '@/lib/issueStore';
+import {
+  getDashboardStats,
+  getIssueById,
+  submitFieldCompletionProof,
+  toPublicIssue,
+} from '@/lib/issueStore';
 import { isValidImageInput, sanitizeText } from '@/lib/validation';
 
 export async function POST(request: Request) {
   const originError = verifySameOrigin(request);
   if (originError) return originError;
+
+  // Enforce authenticated WORKER (or ADMIN) session — never allow anonymous submissions
+  const workerGuard = requireWorker(request);
+  if (!workerGuard.ok) return workerGuard.response;
+  const actor = workerGuard.user;
 
   const ip = getClientIp(request);
   const rl = checkRateLimit(`worker-proof:${ip}`, 30, 5 * 60 * 1000);
@@ -20,8 +31,6 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
     const ticketId = typeof body.ticketId === 'string' ? sanitizeText(body.ticketId, 40) : '';
-    const crewName = typeof body.crewName === 'string' ? sanitizeText(body.crewName, 80) : '';
-    const crewUnitId = typeof body.crewUnitId === 'string' ? sanitizeText(body.crewUnitId, 40) : '';
     const completionNotes =
       typeof body.completionNotes === 'string' ? sanitizeText(body.completionNotes, 600) : '';
     const completionPhotoUrl =
@@ -29,12 +38,6 @@ export async function POST(request: Request) {
 
     if (!ticketId) {
       return NextResponse.json({ error: 'Ticket ID is required.' }, { status: 400 });
-    }
-    if (crewName.length < 2 || crewUnitId.length < 2) {
-      return NextResponse.json(
-        { error: 'Please provide both Crew / Team Name and Crew Unit ID (2+ chars).' },
-        { status: 400 }
-      );
     }
     if (completionNotes.length < 5) {
       return NextResponse.json(
@@ -52,6 +55,30 @@ export async function POST(request: Request) {
       );
     }
 
+    const existing = getIssueById(ticketId);
+    if (!existing) {
+      return NextResponse.json({ error: 'Complaint ticket not found.' }, { status: 404 });
+    }
+
+    // Department ownership check: division-scoped crews cannot submit proof for another division
+    if (
+      actor.role === 'WORKER' &&
+      actor.assignedDepartment &&
+      actor.assignedDepartment !== 'ALL' &&
+      actor.assignedDepartment !== existing.department
+    ) {
+      return NextResponse.json(
+        {
+          error: `Forbidden: Crew unit ${actor.crewUnitId} is assigned to ${actor.assignedDepartment} and cannot submit proof for ${existing.department}.`,
+        },
+        { status: 403 }
+      );
+    }
+
+    // Stamp authoritative crew identity from verified server session (never trust client spoofing)
+    const crewName = actor.name;
+    const crewUnitId = actor.crewUnitId || (actor.role === 'ADMIN' ? 'ADMIN-FIELD' : 'CREW');
+
     const result = submitFieldCompletionProof(ticketId, {
       crewName,
       crewUnitId,
@@ -60,8 +87,29 @@ export async function POST(request: Request) {
     });
 
     if (!result.ok) {
+      if (result.plagiarismDetected) {
+        recordAuditLog({
+          actor,
+          action: 'WORKER_PLAGIARISM_BLOCKED',
+          targetTicketId: ticketId,
+          updatedValues: { crewUnitId, blocked: true },
+          reason: result.error,
+        });
+      }
       return NextResponse.json({ error: result.error }, { status: result.status });
     }
+
+    recordAuditLog({
+      actor,
+      action: 'WORKER_PROOF_SUBMITTED',
+      targetTicketId: ticketId,
+      updatedValues: {
+        crewUnitId,
+        verificationStatus: 'Pending Verification',
+        plagiarismStatus: result.issue.fieldVerification?.plagiarismStatus,
+      },
+      reason: completionNotes,
+    });
 
     // Non-blocking Firestore mirror
     void syncStatusUpdateToFirestore(ticketId, {
@@ -72,7 +120,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         ok: true,
-        issue: toPublicIssue(result.issue, null),
+        issue: toPublicIssue(result.issue, actor),
         stats: getDashboardStats(),
       },
       { status: 200 }

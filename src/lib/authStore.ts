@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import type { SessionUser, UserRecord } from '@/types/civic';
+import type { Department, SessionUser, UserRecord } from '@/types/civic';
 
 export const SESSION_COOKIE_NAME = 'civic_session';
 export const SESSION_TTL_SECONDS = 60 * 60 * 8; // 8 hours
@@ -120,10 +120,89 @@ function ensureBootstrapAdmin(users: UserRecord[]): UserRecord[] {
   return users;
 }
 
+const DEFAULT_WORKERS: Array<{
+  id: string;
+  crewUnitId: string;
+  name: string;
+  email: string;
+  assignedDepartment: Department | 'ALL';
+  defaultPasscode: string;
+}> = [
+  {
+    id: 'usr-worker-lead',
+    crewUnitId: 'CREW-LEAD',
+    name: 'Rapid Response Field Lead',
+    email: 'crew-lead@civicresolve.gov',
+    assignedDepartment: 'ALL',
+    defaultPasscode: 'Crew@Lead!2026',
+  },
+  {
+    id: 'usr-worker-e4',
+    crewUnitId: 'CREW-E4',
+    name: 'Emergency Linemen Team E-4',
+    email: 'crew-e4@civicresolve.gov',
+    assignedDepartment: 'Electrical & Streetlighting Division',
+    defaultPasscode: 'Crew@E4!2026',
+  },
+  {
+    id: 'usr-worker-h2',
+    crewUnitId: 'CREW-H2',
+    name: 'Hydraulic Engineering Unit H-2',
+    email: 'crew-h2@civicresolve.gov',
+    assignedDepartment: 'Water Works & Hydraulic Engineering',
+    defaultPasscode: 'Crew@H2!2026',
+  },
+  {
+    id: 'usr-worker-pwd2',
+    crewUnitId: 'CREW-PWD2',
+    name: 'PWD Road Repair Crew 02',
+    email: 'crew-pwd2@civicresolve.gov',
+    assignedDepartment: 'Roads & Bridges Department (PWD)',
+    defaultPasscode: 'Crew@PWD!2026',
+  },
+  {
+    id: 'usr-worker-swm1',
+    crewUnitId: 'CREW-SWM1',
+    name: 'Solid Waste Clearance Unit 01',
+    email: 'crew-swm1@civicresolve.gov',
+    assignedDepartment: 'Solid Waste Management (SWM)',
+    defaultPasscode: 'Crew@SWM!2026',
+  },
+];
+
+function ensureBootstrapWorkers(users: UserRecord[]): UserRecord[] {
+  const customPasscode = stripSurroundingQuotes(process.env.WORKER_BOOTSTRAP_PASSCODE);
+  let changed = false;
+  const next = [...users];
+
+  for (const w of DEFAULT_WORKERS) {
+    if (!next.some((u) => u.id === w.id)) {
+      next.push({
+        id: w.id,
+        name: w.name,
+        email: w.email,
+        role: 'WORKER',
+        crewUnitId: w.crewUnitId,
+        assignedDepartment: w.assignedDepartment,
+        passwordHash: hashPassword(customPasscode || w.defaultPasscode),
+        createdAt: new Date().toISOString(),
+      });
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    persistUsers(next);
+  }
+  return next;
+}
+
 function loadUsers(): UserRecord[] {
   if (globalForAuth.__civicUsersCache) {
-    return ensureBootstrapAdmin(
-      JSON.parse(JSON.stringify(globalForAuth.__civicUsersCache)) as UserRecord[]
+    return ensureBootstrapWorkers(
+      ensureBootstrapAdmin(
+        JSON.parse(JSON.stringify(globalForAuth.__civicUsersCache)) as UserRecord[]
+      )
     );
   }
   let loaded: UserRecord[] = [];
@@ -137,7 +216,7 @@ function loadUsers(): UserRecord[] {
     loaded = [];
   }
   globalForAuth.__civicUsersCache = loaded;
-  return ensureBootstrapAdmin(loaded);
+  return ensureBootstrapWorkers(ensureBootstrapAdmin(loaded));
 }
 
 function loadRevokedSessions(): RevokedEntry[] {
@@ -181,6 +260,8 @@ export function toSessionUser(record: UserRecord): SessionUser {
     name: record.name,
     email: record.email,
     role: record.role,
+    crewUnitId: record.crewUnitId,
+    assignedDepartment: record.assignedDepartment,
   };
 }
 
@@ -191,6 +272,23 @@ export function findUserById(id: string): UserRecord | undefined {
 export function findUserByEmail(email: string): UserRecord | undefined {
   const normalized = email.trim().toLowerCase();
   return loadUsers().find((u) => u.email.toLowerCase() === normalized);
+}
+
+export function authenticateWorkerCredentials(
+  crewIdentifier: string,
+  passcode: string
+): SessionUser | null {
+  const normalized = crewIdentifier.trim().toLowerCase();
+  if (!normalized || !passcode) return null;
+
+  const record = loadUsers().find(
+    (u) =>
+      u.role === 'WORKER' &&
+      (u.crewUnitId?.toLowerCase() === normalized || u.email.toLowerCase() === normalized)
+  );
+  if (!record) return null;
+  if (!verifyPassword(passcode, record.passwordHash)) return null;
+  return toSessionUser(record);
 }
 
 /**

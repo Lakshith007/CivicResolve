@@ -69,6 +69,8 @@ export interface FieldCompletionSubmission {
   crewUnitId: string;
   completionNotes: string;
   completionPhotoUrl: string;
+  photoHash?: string;
+  plagiarismStatus?: 'Unique (SHA-256 Verified)';
   submittedAt: string;
   verificationStatus: FieldVerificationStatus;
   reviewedBy?: string;
@@ -76,13 +78,15 @@ export interface FieldCompletionSubmission {
   rejectionReason?: string;
 }
 
-export type UserRole = 'CITIZEN' | 'ADMIN';
+export type UserRole = 'CITIZEN' | 'WORKER' | 'ADMIN';
 
 export interface SessionUser {
   id: string;
   name: string;
   email: string;
   role: UserRole;
+  crewUnitId?: string;
+  assignedDepartment?: Department | 'ALL';
 }
 
 export interface UserRecord extends SessionUser {

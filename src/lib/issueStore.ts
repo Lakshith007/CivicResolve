@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import type {
@@ -480,6 +481,10 @@ export function updateIssueStatus(
   return updated;
 }
 
+function hashImageData(dataUrl: string): string {
+  return crypto.createHash('sha256').update(dataUrl.trim()).digest('hex');
+}
+
 export function submitFieldCompletionProof(
   id: string,
   payload: {
@@ -488,7 +493,9 @@ export function submitFieldCompletionProof(
     completionNotes: string;
     completionPhotoUrl: string;
   }
-): { ok: true; issue: CivicIssue } | { ok: false; error: string; status: number } {
+):
+  | { ok: true; issue: CivicIssue }
+  | { ok: false; error: string; status: number; plagiarismDetected?: boolean } {
   const issues = loadIssues();
   const idx = issues.findIndex((item) => item.id === id);
   if (idx === -1) {
@@ -507,6 +514,42 @@ export function submitFieldCompletionProof(
     };
   }
 
+  // Cryptographic Photo Plagiarism & Reuse Detection (SHA-256)
+  const photoHash = hashImageData(payload.completionPhotoUrl);
+
+  // Check 1: Cannot re-upload the citizen's original "Before" photo as completion proof
+  if (existing.imageUrl && hashImageData(existing.imageUrl) === photoHash) {
+    return {
+      ok: false,
+      error:
+        'Plagiarism Detected: Submitted completion photo is identical to the citizen\'s original "Before" complaint photo. Please upload a genuine photo of the completed repair.',
+      status: 400,
+      plagiarismDetected: true,
+    };
+  }
+
+  // Check 2: Cannot reuse a completion photo already submitted on another ticket
+  for (const other of issues) {
+    if (other.id === existing.id) continue;
+    const otherProofHash =
+      other.fieldVerification?.photoHash ||
+      (other.fieldVerification?.completionPhotoUrl
+        ? hashImageData(other.fieldVerification.completionPhotoUrl)
+        : null);
+    const otherResolvedHash = other.resolutionEvidenceUrl
+      ? hashImageData(other.resolutionEvidenceUrl)
+      : null;
+
+    if (otherProofHash === photoHash || otherResolvedHash === photoHash) {
+      return {
+        ok: false,
+        error: `Plagiarism Detected: This completion photo was already submitted as proof for ticket ${other.id}. Reusing photos across complaints is prohibited.`,
+        status: 400,
+        plagiarismDetected: true,
+      };
+    }
+  }
+
   const now = new Date().toISOString();
   const updated: CivicIssue = {
     ...existing,
@@ -515,6 +558,8 @@ export function submitFieldCompletionProof(
       crewUnitId: payload.crewUnitId,
       completionNotes: payload.completionNotes,
       completionPhotoUrl: payload.completionPhotoUrl,
+      photoHash,
+      plagiarismStatus: 'Unique (SHA-256 Verified)',
       submittedAt: now,
       verificationStatus: 'Pending Verification',
     },
@@ -524,7 +569,7 @@ export function submitFieldCompletionProof(
       {
         status: 'In Progress',
         timestamp: now,
-        note: `Field crew ${payload.crewName} (${payload.crewUnitId}) posted completion photo for administrator verification: "${payload.completionNotes}"`,
+        note: `Field crew ${payload.crewName} (${payload.crewUnitId}) posted unique completion photo (SHA-256 verified) for administrator review: "${payload.completionNotes}"`,
         updatedBy: `Field Crew · ${payload.crewUnitId}`,
       },
     ],

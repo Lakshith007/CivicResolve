@@ -1451,17 +1451,25 @@ export function AdminDashboard({
                     <ClipboardCheck className="h-4 w-4 text-violet-700" aria-hidden="true" />
                     Field Crew Completion Submission
                   </span>
-                  <span
-                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
-                      editingIssue.fieldVerification.verificationStatus === 'Approved'
-                        ? 'bg-emerald-100 text-emerald-900'
-                        : editingIssue.fieldVerification.verificationStatus === 'Rejected'
-                        ? 'bg-red-100 text-red-900'
-                        : 'bg-violet-700 text-white'
-                    }`}
-                  >
-                    {editingIssue.fieldVerification.verificationStatus}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {editingIssue.fieldVerification.plagiarismStatus && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-900">
+                        <ShieldCheck className="h-3 w-3" aria-hidden="true" />
+                        {editingIssue.fieldVerification.plagiarismStatus}
+                      </span>
+                    )}
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+                        editingIssue.fieldVerification.verificationStatus === 'Approved'
+                          ? 'bg-emerald-100 text-emerald-900'
+                          : editingIssue.fieldVerification.verificationStatus === 'Rejected'
+                          ? 'bg-red-100 text-red-900'
+                          : 'bg-violet-700 text-white'
+                      }`}
+                    >
+                      {editingIssue.fieldVerification.verificationStatus}
+                    </span>
+                  </div>
                 </div>
                 <p className="mt-1.5 text-slate-800">
                   <strong>
