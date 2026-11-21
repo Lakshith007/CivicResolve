@@ -72,9 +72,16 @@ export function AdminCommandClient({
       .filter(
         (i) =>
           i.status !== 'Resolved' &&
-          (i.priority === 'Critical' || i.status === 'Reported')
+          (i.fieldVerification?.verificationStatus === 'Pending Verification' ||
+            i.priority === 'Critical' ||
+            i.status === 'Reported')
       )
-      .sort((a, b) => b.urgencyScore - a.urgencyScore)
+      .sort((a, b) => {
+        const aPending = a.fieldVerification?.verificationStatus === 'Pending Verification' ? 1 : 0;
+        const bPending = b.fieldVerification?.verificationStatus === 'Pending Verification' ? 1 : 0;
+        if (bPending !== aPending) return bPending - aPending;
+        return b.urgencyScore - a.urgencyScore;
+      })
       .slice(0, 6);
   }, [issues]);
 
@@ -119,6 +126,29 @@ export function AdminCommandClient({
     const data = await res.json();
     if (!res.ok) {
       return { ok: false, error: data.error || 'Failed to update issue.' };
+    }
+    setIssues((prev) => prev.map((item) => (item.id === id ? data.issue : item)));
+    if (data.stats) setStats(data.stats);
+    await refreshCommandData();
+    return { ok: true };
+  };
+
+  const handleVerifyFieldWork = async (
+    id: string,
+    payload: {
+      verificationDecision: 'approve' | 'reject';
+      adminNotes?: string;
+      rejectionReason?: string;
+    }
+  ): Promise<{ ok: boolean; error?: string }> => {
+    const res = await fetch(`/api/issues/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { ok: false, error: data.error || 'Failed to record verification decision.' };
     }
     setIssues((prev) => prev.map((item) => (item.id === id ? data.issue : item)));
     if (data.stats) setStats(data.stats);
@@ -360,6 +390,7 @@ export function AdminCommandClient({
           selectedIssueFromHeader={selectedIssueFromHeader}
           onClearHeaderSelection={() => setSelectedIssueFromHeader(null)}
           onUpdateIssue={handleUpdateIssue}
+          onVerifyFieldWork={handleVerifyFieldWork}
         />
       </main>
     </div>

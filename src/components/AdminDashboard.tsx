@@ -65,6 +65,14 @@ interface AdminDashboardProps {
       resolutionEvidenceUrl?: string;
     }
   ) => Promise<{ ok: boolean; error?: string }>;
+  onVerifyFieldWork?: (
+    id: string,
+    payload: {
+      verificationDecision: 'approve' | 'reject';
+      adminNotes?: string;
+      rejectionReason?: string;
+    }
+  ) => Promise<{ ok: boolean; error?: string }>;
 }
 
 type QueueFilter = 'active' | 'all' | 'resolved' | IssuePriority;
@@ -131,6 +139,7 @@ export function AdminDashboard({
   selectedIssueFromHeader,
   onClearHeaderSelection,
   onUpdateIssue,
+  onVerifyFieldWork,
 }: AdminDashboardProps) {
   const [queueFilter, setQueueFilter] = useState<QueueFilter>('active');
   const [searchQuery, setSearchQuery] = useState('');
@@ -152,6 +161,9 @@ export function AdminDashboard({
   const [modalError, setModalError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [rejectingMode, setRejectingMode] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
 
   const openTriageModal = (
     issue: CivicIssue,
@@ -165,7 +177,51 @@ export function AdminDashboard({
     setPriorityOverrideReason('');
     setAdminNotes(issue.adminNotes ?? '');
     setResolutionEvidenceUrl(issue.resolutionEvidenceUrl);
+    setRejectingMode(false);
+    setRejectionReason('');
     setModalError(null);
+  };
+
+  const pendingVerifications = useMemo(
+    () =>
+      issues.filter(
+        (i) =>
+          i.status !== 'Resolved' &&
+          i.fieldVerification?.verificationStatus === 'Pending Verification'
+      ),
+    [issues]
+  );
+
+  const handleFieldVerificationDecision = async (
+    issue: CivicIssue,
+    decision: 'approve' | 'reject'
+  ) => {
+    if (!onVerifyFieldWork) return;
+    setModalError(null);
+    if (decision === 'reject' && rejectionReason.trim().length < 5) {
+      setModalError('Please enter a clear rework reason (5+ characters) for the field crew.');
+      return;
+    }
+    setIsVerifying(true);
+    try {
+      const res = await onVerifyFieldWork(issue.id, {
+        verificationDecision: decision,
+        adminNotes: adminNotes.trim() || undefined,
+        rejectionReason: decision === 'reject' ? rejectionReason.trim() : undefined,
+      });
+      if (!res.ok) {
+        setModalError(res.error || 'Verification update failed.');
+        return;
+      }
+      setToastMessage(
+        decision === 'approve'
+          ? `Verified completion photo for ${issue.id} — ticket marked Resolved!`
+          : `Sent rework request back to field crew for ${issue.id}.`
+      );
+      setEditingIssue(null);
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   // Open modal when header notification selects a complaint
@@ -1196,6 +1252,70 @@ export function AdminDashboard({
       {activeSection === 'overview' && (
         <>
           {renderKpiCards()}
+          {pendingVerifications.length > 0 && (
+            <section
+              aria-labelledby="field-verification-heading"
+              className="rounded-2xl border border-violet-300 bg-violet-50/40 p-5 shadow-sm"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-violet-200/80 pb-3">
+                <div>
+                  <h2
+                    id="field-verification-heading"
+                    className="flex items-center gap-2 text-base font-bold text-slate-900"
+                  >
+                    <ClipboardCheck className="h-4 w-4 text-violet-700" aria-hidden="true" />
+                    <span>Pending Field Crew Verifications</span>
+                    <span className="rounded-full bg-violet-700 px-2.5 py-0.5 text-xs font-bold text-white">
+                      {pendingVerifications.length} awaiting review
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-600">
+                    Dispatched teams have uploaded completed work photos — inspect and approve to
+                    mark Resolved
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+                {pendingVerifications.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex flex-col justify-between gap-3 rounded-xl border border-violet-200 bg-white p-4 shadow-sm sm:flex-row"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-xs font-bold text-blue-700">{item.id}</span>
+                        <PriorityBadge priority={item.priority} />
+                        <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-900">
+                          {item.fieldVerification?.crewUnitId}
+                        </span>
+                      </div>
+                      <h3 className="mt-1.5 text-sm font-bold text-slate-900">{item.title}</h3>
+                      <p className="mt-1 text-xs text-slate-600">
+                        <strong>{item.fieldVerification?.crewName}:</strong>{' '}
+                        {item.fieldVerification?.completionNotes}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => openTriageModal(item, 'general')}
+                        className="focus-ring mt-3 inline-flex items-center gap-1.5 rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-800"
+                      >
+                        <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                        <span>Verify Photo &amp; Approve</span>
+                      </button>
+                    </div>
+                    {item.fieldVerification?.completionPhotoUrl && (
+                      <img
+                        src={item.fieldVerification.completionPhotoUrl}
+                        alt="Field crew completion proof"
+                        className="h-28 w-full shrink-0 rounded-lg border border-slate-200 object-cover sm:w-36"
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
           {renderCriticalAlerts()}
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
             <div className="xl:col-span-7">
@@ -1293,19 +1413,141 @@ export function AdminDashboard({
                   <strong>Recommended Action:</strong> {editingIssue.aiAnalysis.suggestedAction}
                 </p>
               </div>
-              {editingIssue.imageUrl && (
-                <div>
-                  <span className="block text-[11px] font-semibold text-slate-600 mb-1">
-                    Submitted Field Photo
-                  </span>
-                  <img
-                    src={editingIssue.imageUrl}
-                    alt="Citizen submitted evidence"
-                    className="max-h-40 rounded-lg border border-slate-200 object-cover"
-                  />
+              {(editingIssue.imageUrl || editingIssue.fieldVerification) && (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {editingIssue.imageUrl && (
+                    <div>
+                      <span className="mb-1 block text-[11px] font-semibold text-slate-600">
+                        Before · Citizen Reported Photo
+                      </span>
+                      <img
+                        src={editingIssue.imageUrl}
+                        alt="Citizen submitted evidence"
+                        className="h-40 w-full rounded-lg border border-slate-200 object-cover"
+                      />
+                    </div>
+                  )}
+                  {editingIssue.fieldVerification?.completionPhotoUrl && (
+                    <div>
+                      <span className="mb-1 block text-[11px] font-semibold text-violet-800">
+                        After · Field Crew Proof ({editingIssue.fieldVerification.crewUnitId})
+                      </span>
+                      <img
+                        src={editingIssue.fieldVerification.completionPhotoUrl}
+                        alt="Field crew completed work proof"
+                        className="h-40 w-full rounded-lg border-2 border-violet-300 object-cover"
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
+
+            {/* Field Crew Verification Decision Bar */}
+            {editingIssue.fieldVerification && (
+              <div className="mt-4 rounded-xl border border-violet-300 bg-violet-50/70 p-4 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1.5 font-bold text-violet-950">
+                    <ClipboardCheck className="h-4 w-4 text-violet-700" aria-hidden="true" />
+                    Field Crew Completion Submission
+                  </span>
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+                      editingIssue.fieldVerification.verificationStatus === 'Approved'
+                        ? 'bg-emerald-100 text-emerald-900'
+                        : editingIssue.fieldVerification.verificationStatus === 'Rejected'
+                        ? 'bg-red-100 text-red-900'
+                        : 'bg-violet-700 text-white'
+                    }`}
+                  >
+                    {editingIssue.fieldVerification.verificationStatus}
+                  </span>
+                </div>
+                <p className="mt-1.5 text-slate-800">
+                  <strong>
+                    {editingIssue.fieldVerification.crewName} (
+                    {editingIssue.fieldVerification.crewUnitId}):
+                  </strong>{' '}
+                  {editingIssue.fieldVerification.completionNotes}
+                </p>
+                <p suppressHydrationWarning className="mt-0.5 text-[11px] text-slate-500">
+                  Submitted {formatDateTime(editingIssue.fieldVerification.submittedAt)}
+                </p>
+
+                {editingIssue.fieldVerification.verificationStatus === 'Pending Verification' &&
+                  onVerifyFieldWork && (
+                    <div className="mt-3 space-y-2.5 border-t border-violet-200 pt-3">
+                      {!rejectingMode ? (
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={isVerifying}
+                            onClick={() =>
+                              handleFieldVerificationDecision(editingIssue, 'approve')
+                            }
+                            className="focus-ring inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+                          >
+                            {isVerifying ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                            ) : (
+                              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                            )}
+                            <span>Verify Photo &amp; Mark Completed</span>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isVerifying}
+                            onClick={() => setRejectingMode(true)}
+                            className="focus-ring inline-flex items-center gap-1.5 rounded-xl border border-red-300 bg-white px-4 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                          >
+                            <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+                            <span>Reject &amp; Request Rework</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2 rounded-lg border border-red-200 bg-white p-3">
+                          <label
+                            htmlFor="rework-reason-input"
+                            className="block text-xs font-bold text-red-900"
+                          >
+                            Rework Feedback for Field Crew *
+                          </label>
+                          <input
+                            id="rework-reason-input"
+                            type="text"
+                            value={rejectionReason}
+                            onChange={(e) => setRejectionReason(e.target.value)}
+                            placeholder="e.g. Debris still blocking drainage grating; please clear and re-photograph."
+                            className="w-full rounded-lg border border-red-300 px-3 py-1.5 text-xs text-slate-900 focus:border-red-500 focus:outline-none"
+                          />
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              disabled={isVerifying}
+                              onClick={() =>
+                                handleFieldVerificationDecision(editingIssue, 'reject')
+                              }
+                              className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                            >
+                              {isVerifying ? 'Sending...' : 'Confirm Reject & Send Back'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRejectingMode(false);
+                                setRejectionReason('');
+                              }}
+                              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+              </div>
+            )}
 
             {/* Administrative Action Form */}
             <form onSubmit={handleSaveTriage} className="mt-4 space-y-4">

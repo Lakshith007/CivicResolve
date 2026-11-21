@@ -10,12 +10,13 @@ import {
   canAccessPrivateIssue,
   getDashboardStats,
   getIssueById,
+  reviewFieldCompletionProof,
   toPublicIssue,
   updateIssueStatus,
   upvoteIssue,
 } from '@/lib/issueStore';
 import { syncStatusUpdateToFirestore } from '@/lib/firebase';
-import { validateStatusUpdate, validateTicketId } from '@/lib/validation';
+import { sanitizeText, validateStatusUpdate, validateTicketId } from '@/lib/validation';
 
 export async function GET(
   request: Request,
@@ -68,7 +69,8 @@ export async function PATCH(
         'department' in body ||
         'priority' in body ||
         'adminNotes' in body ||
-        'resolutionEvidenceUrl' in body);
+        'resolutionEvidenceUrl' in body ||
+        'verificationDecision' in body);
 
     if (body?.action === 'upvote' && !hasAdminFields) {
       const updated = upvoteIssue(context.params.id);
@@ -90,6 +92,59 @@ export async function PATCH(
     const existing = getIssueById(context.params.id);
     if (!existing) {
       return NextResponse.json({ error: 'Civic issue ticket not found.' }, { status: 404 });
+    }
+
+    // Handle Admin Field Crew Photo Verification (Approve & Mark Resolved OR Reject for Rework)
+    if (body.verificationDecision === 'approve' || body.verificationDecision === 'reject') {
+      const decision = body.verificationDecision;
+      const rejectionReason =
+        typeof body.rejectionReason === 'string' ? sanitizeText(body.rejectionReason, 400) : '';
+      const adminNotes =
+        typeof body.adminNotes === 'string' ? sanitizeText(body.adminNotes, 500) : undefined;
+
+      if (decision === 'reject' && rejectionReason.length < 5) {
+        return NextResponse.json(
+          { error: 'Please provide a clear rework reason (5+ characters) when rejecting field proof.' },
+          { status: 400 }
+        );
+      }
+
+      const reviewRes = reviewFieldCompletionProof(context.params.id, {
+        decision,
+        reviewerName: `${adminGuard.user.name} (${adminGuard.user.email})`,
+        adminNotes,
+        rejectionReason: decision === 'reject' ? rejectionReason : undefined,
+      });
+
+      if (!reviewRes.ok) {
+        return NextResponse.json({ error: reviewRes.error }, { status: reviewRes.status });
+      }
+
+      void syncStatusUpdateToFirestore(context.params.id, {
+        status: reviewRes.issue.status,
+        adminNotes: reviewRes.issue.adminNotes,
+        resolutionEvidenceUrl: reviewRes.issue.resolutionEvidenceUrl,
+        fieldVerification: reviewRes.issue.fieldVerification,
+        statusHistory: reviewRes.issue.statusHistory,
+      });
+
+      recordAuditLog({
+        actor: adminGuard.user,
+        action: decision === 'approve' ? 'ADMIN_VERIFY_AND_RESOLVE' : 'ADMIN_REJECT_FIELD_WORK',
+        targetTicketId: existing.id,
+        previousValues: {
+          status: existing.status,
+          verificationStatus: existing.fieldVerification?.verificationStatus,
+        },
+        updatedValues: {
+          status: reviewRes.issue.status,
+          verificationStatus: reviewRes.issue.fieldVerification?.verificationStatus,
+          crewUnitId: reviewRes.issue.fieldVerification?.crewUnitId,
+        },
+        reason: decision === 'reject' ? rejectionReason : adminNotes || 'Field photo verified',
+      });
+
+      return NextResponse.json({ issue: reviewRes.issue, stats: getDashboardStats() });
     }
 
     const validation = validateStatusUpdate(body);

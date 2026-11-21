@@ -7,6 +7,7 @@ import {
   ArrowRight,
   Building2,
   FilePlus2,
+  HardHat,
   Home,
   Landmark,
   Loader2,
@@ -180,6 +181,14 @@ export default function HomePage() {
               <FilePlus2 className="h-3.5 w-3.5" aria-hidden="true" />
               <span>Report Issue</span>
             </button>
+
+            <Link
+              href="/worker"
+              className="focus-ring inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-amber-50 hover:text-amber-800 sm:text-sm"
+            >
+              <HardHat className="h-3.5 w-3.5 text-amber-600" aria-hidden="true" />
+              <span>Field Crew</span>
+            </Link>
           </nav>
 
           {/* Right Admin Control */}
@@ -220,7 +229,7 @@ export default function HomePage() {
       {/* Role-Selection Landing View */}
       {activeTab === 'home' ? (
         <main className="flex flex-1 flex-col items-center justify-center bg-gradient-to-b from-white via-slate-50/60 to-slate-100/70 px-4 py-14 sm:px-6 lg:px-8">
-          <div className="w-full max-w-4xl text-center">
+          <div className="w-full max-w-6xl text-center">
             <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
               Welcome to{' '}
               <span className="bg-gradient-to-r from-blue-700 via-blue-600 to-emerald-600 bg-clip-text text-transparent">
@@ -232,7 +241,7 @@ export default function HomePage() {
             </p>
 
             {/* Role Selection Cards */}
-            <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-3">
               {/* Citizen Role Card */}
               <div className="group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-7 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md">
                 <div>
@@ -270,6 +279,40 @@ export default function HomePage() {
                     <Activity className="h-3.5 w-3.5 text-blue-700" aria-hidden="true" />
                     <span>Explore Live Issue Map &amp; Tracker ({stats.total})</span>
                   </button>
+                </div>
+              </div>
+
+              {/* Field Crew / Worker Role Card */}
+              <div className="group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-7 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-md">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-md shadow-amber-500/20">
+                      <HardHat className="h-7 w-7" aria-hidden="true" />
+                    </div>
+                    <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-900">
+                      Field Operations
+                    </span>
+                  </div>
+
+                  <h2 className="mt-5 text-xl font-extrabold text-slate-900">
+                    I am a Field Crew
+                  </h2>
+                  <p className="mt-1.5 text-sm text-slate-600">
+                    View dispatched work orders and upload completed repair photos for administrator verification.
+                  </p>
+                </div>
+
+                <div className="mt-6 space-y-2.5">
+                  <Link
+                    href="/worker"
+                    className="focus-ring inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-700"
+                  >
+                    <span>Open Crew Portal</span>
+                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                  </Link>
+                  <p className="text-center text-[11px] text-slate-500">
+                    {stats.inProgress} active dispatch{stats.inProgress === 1 ? '' : 'es'} in progress
+                  </p>
                 </div>
               </div>
 

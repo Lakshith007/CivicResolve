@@ -7,6 +7,7 @@ import { GET as adminComplaintsGet } from '@/app/api/admin/complaints/route';
 import { GET as adminAnalyticsGet } from '@/app/api/admin/analytics/route';
 import { GET as issuesGet, POST as issuesPost } from '@/app/api/issues/route';
 import { GET as issueByIdGet, PATCH as issueByIdPatch } from '@/app/api/issues/[id]/route';
+import { POST as workerProofPost } from '@/app/api/worker/submit-proof/route';
 import { resetAuditStoreForTesting } from '@/lib/auditStore';
 import { resetRateLimitsForTesting } from '@/lib/authGuards';
 import { createSessionToken, resetAuthStoreForTesting, SESSION_COOKIE_NAME } from '@/lib/authStore';
@@ -461,5 +462,124 @@ describe('CivicResolve RBAC & Application Security Verification', () => {
       makeJsonRequest('http://localhost/api/admin/complaints', 'GET', undefined, admin2FACookie)
     );
     expect(testAdminAccess.status).toBe(200);
+  });
+
+  it('enforces Field Crew photo proof submission and Admin-only verification/approval workflow', async () => {
+    const validPng =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const spoofedSvg = 'data:image/svg+xml;base64,PHN2Zz48c2NyaXB0PmFsZXJ0KDEpPC9zY3JpcHQ+PC9zdmc+';
+
+    // 1. Rejects proof on un-dispatched Reported ticket (CR-2026-1002 is Reported)
+    const notDispatched = await workerProofPost(
+      makeJsonRequest('http://localhost/api/worker/submit-proof', 'POST', {
+        ticketId: 'CR-2026-1002',
+        crewName: 'Hydraulic Unit',
+        crewUnitId: 'CREW-H2',
+        completionNotes: 'Repaired burst pipe valve.',
+        completionPhotoUrl: validPng,
+      })
+    );
+    expect(notDispatched.status).toBe(400);
+
+    // 2. Rejects spoofed/SVG image on In Progress ticket (CR-2026-1001 is In Progress)
+    const badPhoto = await workerProofPost(
+      makeJsonRequest('http://localhost/api/worker/submit-proof', 'POST', {
+        ticketId: 'CR-2026-1001',
+        crewName: 'Electrical Crew',
+        crewUnitId: 'CREW-E4',
+        completionNotes: 'Isolated wire and replaced fuse box.',
+        completionPhotoUrl: spoofedSvg,
+      })
+    );
+    expect(badPhoto.status).toBe(400);
+
+    // 3. Valid PNG proof submission succeeds, marks Pending Verification, keeps status In Progress
+    const validProof = await workerProofPost(
+      makeJsonRequest('http://localhost/api/worker/submit-proof', 'POST', {
+        ticketId: 'CR-2026-1001',
+        crewName: 'Electrical Crew',
+        crewUnitId: 'CREW-E4',
+        completionNotes: 'Replaced feeder cable and restored streetlight pole illumination.',
+        completionPhotoUrl: validPng,
+      })
+    );
+    expect(validProof.status).toBe(200);
+    const proofJson = await validProof.json();
+    expect(proofJson.issue.status).toBe('In Progress');
+    expect(proofJson.issue.fieldVerification.verificationStatus).toBe('Pending Verification');
+
+    // 4. Unauthenticated user cannot approve verification -> 401
+    const unauthApprove = await issueByIdPatch(
+      makeJsonRequest('http://localhost/api/issues/CR-2026-1001', 'PATCH', {
+        verificationDecision: 'approve',
+      }),
+      { params: { id: 'CR-2026-1001' } }
+    );
+    expect(unauthApprove.status).toBe(401);
+
+    // Authenticate Admin
+    const loginRes = await loginPost(
+      makeJsonRequest('http://localhost/api/auth/login', 'POST', {
+        email: 'admin@civicresolve.gov',
+        password: 'TestAdmin#2026!Secure',
+      })
+    );
+    const adminCookie = extractCookieValue(loginRes, SESSION_COOKIE_NAME);
+    expect(adminCookie).toBeTruthy();
+
+    // 5. Admin reject without reason -> 400
+    const rejectNoReason = await issueByIdPatch(
+      makeJsonRequest(
+        'http://localhost/api/issues/CR-2026-1001',
+        'PATCH',
+        { verificationDecision: 'reject' },
+        adminCookie
+      ),
+      { params: { id: 'CR-2026-1001' } }
+    );
+    expect(rejectNoReason.status).toBe(400);
+
+    // 6. Admin reject with reason -> 200, keeps In Progress, logs ADMIN_REJECT_FIELD_WORK
+    const rejectValid = await issueByIdPatch(
+      makeJsonRequest(
+        'http://localhost/api/issues/CR-2026-1001',
+        'PATCH',
+        {
+          verificationDecision: 'reject',
+          rejectionReason: 'Photo is blurry; please re-photograph insulated junction box.',
+        },
+        adminCookie
+      ),
+      { params: { id: 'CR-2026-1001' } }
+    );
+    expect(rejectValid.status).toBe(200);
+    const rejectJson = await rejectValid.json();
+    expect(rejectJson.issue.status).toBe('In Progress');
+    expect(rejectJson.issue.fieldVerification.verificationStatus).toBe('Rejected');
+
+    // 7. Admin approves -> 200, marks Resolved, copies proof to resolutionEvidenceUrl, logs audit
+    const approveRes = await issueByIdPatch(
+      makeJsonRequest(
+        'http://localhost/api/issues/CR-2026-1001',
+        'PATCH',
+        {
+          verificationDecision: 'approve',
+          adminNotes: 'Verified insulated junction box and illumination.',
+        },
+        adminCookie
+      ),
+      { params: { id: 'CR-2026-1001' } }
+    );
+    expect(approveRes.status).toBe(200);
+    const approveJson = await approveRes.json();
+    expect(approveJson.issue.status).toBe('Resolved');
+    expect(approveJson.issue.fieldVerification.verificationStatus).toBe('Approved');
+    expect(approveJson.issue.resolutionEvidenceUrl).toBe(validPng);
+
+    const analyticsRes = await adminAnalyticsGet(
+      makeJsonRequest('http://localhost/api/admin/analytics', 'GET', undefined, adminCookie)
+    );
+    const analyticsJson = await analyticsRes.json();
+    expect(analyticsJson.auditLogs[0].action).toBe('ADMIN_VERIFY_AND_RESOLVE');
   });
 });

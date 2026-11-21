@@ -480,6 +480,151 @@ export function updateIssueStatus(
   return updated;
 }
 
+export function submitFieldCompletionProof(
+  id: string,
+  payload: {
+    crewName: string;
+    crewUnitId: string;
+    completionNotes: string;
+    completionPhotoUrl: string;
+  }
+): { ok: true; issue: CivicIssue } | { ok: false; error: string; status: number } {
+  const issues = loadIssues();
+  const idx = issues.findIndex((item) => item.id === id);
+  if (idx === -1) {
+    return { ok: false, error: 'Complaint ticket not found.', status: 404 };
+  }
+
+  const existing = issues[idx];
+  if (existing.status !== 'In Progress') {
+    return {
+      ok: false,
+      error:
+        existing.status === 'Resolved'
+          ? 'This complaint is already verified and resolved.'
+          : 'Completion proof can only be submitted after an administrator dispatches the ticket (In Progress).',
+      status: 400,
+    };
+  }
+
+  const now = new Date().toISOString();
+  const updated: CivicIssue = {
+    ...existing,
+    fieldVerification: {
+      crewName: payload.crewName,
+      crewUnitId: payload.crewUnitId,
+      completionNotes: payload.completionNotes,
+      completionPhotoUrl: payload.completionPhotoUrl,
+      submittedAt: now,
+      verificationStatus: 'Pending Verification',
+    },
+    updatedAt: now,
+    statusHistory: [
+      ...existing.statusHistory,
+      {
+        status: 'In Progress',
+        timestamp: now,
+        note: `Field crew ${payload.crewName} (${payload.crewUnitId}) posted completion photo for administrator verification: "${payload.completionNotes}"`,
+        updatedBy: `Field Crew · ${payload.crewUnitId}`,
+      },
+    ],
+  };
+
+  issues[idx] = updated;
+  persistIssues(issues);
+  return { ok: true, issue: updated };
+}
+
+export function reviewFieldCompletionProof(
+  id: string,
+  params: {
+    decision: 'approve' | 'reject';
+    reviewerName: string;
+    adminNotes?: string;
+    rejectionReason?: string;
+  }
+): { ok: true; issue: CivicIssue } | { ok: false; error: string; status: number } {
+  const issues = loadIssues();
+  const idx = issues.findIndex((item) => item.id === id);
+  if (idx === -1) {
+    return { ok: false, error: 'Complaint ticket not found.', status: 404 };
+  }
+
+  const existing = issues[idx];
+  if (!existing.fieldVerification) {
+    return {
+      ok: false,
+      error: 'No field completion proof has been submitted for this ticket.',
+      status: 400,
+    };
+  }
+
+  const now = new Date().toISOString();
+
+  if (params.decision === 'approve') {
+    const note =
+      params.adminNotes?.trim() ||
+      `Supervisor verified field completion photo from ${existing.fieldVerification.crewName} (${existing.fieldVerification.crewUnitId}) and closed ticket.`;
+
+    const updated: CivicIssue = {
+      ...existing,
+      status: 'Resolved',
+      adminNotes: note,
+      resolutionEvidenceUrl: existing.fieldVerification.completionPhotoUrl,
+      fieldVerification: {
+        ...existing.fieldVerification,
+        verificationStatus: 'Approved',
+        reviewedBy: params.reviewerName,
+        reviewedAt: now,
+        rejectionReason: undefined,
+      },
+      updatedAt: now,
+      statusHistory: [
+        ...existing.statusHistory,
+        {
+          status: 'Resolved',
+          timestamp: now,
+          note,
+          updatedBy: params.reviewerName,
+        },
+      ],
+    };
+
+    issues[idx] = updated;
+    persistIssues(issues);
+    return { ok: true, issue: updated };
+  }
+
+  // Reject & request rework
+  const reason = params.rejectionReason?.trim() || 'Additional field remediation required.';
+  const updated: CivicIssue = {
+    ...existing,
+    status: 'In Progress',
+    adminNotes: `Rework requested: ${reason}`,
+    fieldVerification: {
+      ...existing.fieldVerification,
+      verificationStatus: 'Rejected',
+      reviewedBy: params.reviewerName,
+      reviewedAt: now,
+      rejectionReason: reason,
+    },
+    updatedAt: now,
+    statusHistory: [
+      ...existing.statusHistory,
+      {
+        status: 'In Progress',
+        timestamp: now,
+        note: `Supervisor rejected field completion proof and requested rework: "${reason}"`,
+        updatedBy: params.reviewerName,
+      },
+    ],
+  };
+
+  issues[idx] = updated;
+  persistIssues(issues);
+  return { ok: true, issue: updated };
+}
+
 export function upvoteIssue(id: string): CivicIssue | null {
   const issues = loadIssues();
   const idx = issues.findIndex((item) => item.id === id);

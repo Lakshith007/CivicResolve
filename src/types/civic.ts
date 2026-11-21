@@ -62,6 +62,20 @@ export interface StatusHistoryEntry {
   updatedBy: string;
 }
 
+export type FieldVerificationStatus = 'Pending Verification' | 'Approved' | 'Rejected';
+
+export interface FieldCompletionSubmission {
+  crewName: string;
+  crewUnitId: string;
+  completionNotes: string;
+  completionPhotoUrl: string;
+  submittedAt: string;
+  verificationStatus: FieldVerificationStatus;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  rejectionReason?: string;
+}
+
 export type UserRole = 'CITIZEN' | 'ADMIN';
 
 export interface SessionUser {
@@ -106,6 +120,7 @@ export interface CivicIssue {
   status: IssueStatus;
   imageUrl?: string;
   resolutionEvidenceUrl?: string;
+  fieldVerification?: FieldCompletionSubmission;
   reporterUserId?: string;
   reporterName: string;
   reporterContact?: string;
