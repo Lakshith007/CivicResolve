@@ -10,12 +10,13 @@ import {
   canAccessPrivateIssue,
   getDashboardStats,
   getIssueById,
+  hydrateIssuesFromFirestore,
   reviewFieldCompletionProof,
   toPublicIssue,
   updateIssueStatus,
   upvoteIssue,
 } from '@/lib/issueStore';
-import { syncStatusUpdateToFirestore } from '@/lib/firebase';
+import { syncIssueToFirestore } from '@/lib/firebase';
 import { sanitizeText, validateStatusUpdate, validateTicketId } from '@/lib/validation';
 
 export async function GET(
@@ -26,6 +27,7 @@ export async function GET(
     return NextResponse.json({ error: 'Invalid civic ticket ID format.' }, { status: 400 });
   }
 
+  await hydrateIssuesFromFirestore();
   const issue = getIssueById(context.params.id);
   if (!issue) {
     return NextResponse.json({ error: 'Civic issue ticket not found.' }, { status: 404 });
@@ -73,11 +75,12 @@ export async function PATCH(
         'verificationDecision' in body);
 
     if (body?.action === 'upvote' && !hasAdminFields) {
+      await hydrateIssuesFromFirestore();
       const updated = upvoteIssue(context.params.id);
       if (!updated) {
         return NextResponse.json({ error: 'Civic issue ticket not found.' }, { status: 404 });
       }
-      void syncStatusUpdateToFirestore(context.params.id, { upvotes: updated.upvotes });
+      await syncIssueToFirestore(updated);
       const viewer = authenticateUser(request);
       return NextResponse.json({
         issue: toPublicIssue(updated, viewer),
@@ -89,6 +92,7 @@ export async function PATCH(
     const adminGuard = requireAdmin(request);
     if (!adminGuard.ok) return adminGuard.response;
 
+    await hydrateIssuesFromFirestore();
     const existing = getIssueById(context.params.id);
     if (!existing) {
       return NextResponse.json({ error: 'Civic issue ticket not found.' }, { status: 404 });
@@ -120,13 +124,7 @@ export async function PATCH(
         return NextResponse.json({ error: reviewRes.error }, { status: reviewRes.status });
       }
 
-      void syncStatusUpdateToFirestore(context.params.id, {
-        status: reviewRes.issue.status,
-        adminNotes: reviewRes.issue.adminNotes,
-        resolutionEvidenceUrl: reviewRes.issue.resolutionEvidenceUrl,
-        fieldVerification: reviewRes.issue.fieldVerification,
-        statusHistory: reviewRes.issue.statusHistory,
-      });
+      await syncIssueToFirestore(reviewRes.issue);
 
       recordAuditLog({
         actor: adminGuard.user,
@@ -178,13 +176,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Civic issue ticket not found.' }, { status: 404 });
     }
 
-    void syncStatusUpdateToFirestore(context.params.id, {
-      status: updated.status,
-      department: updated.department,
-      priority: updated.priority,
-      adminNotes: updated.adminNotes,
-      statusHistory: updated.statusHistory,
-    });
+    await syncIssueToFirestore(updated);
 
     recordAuditLog({
       actor: adminGuard.user,

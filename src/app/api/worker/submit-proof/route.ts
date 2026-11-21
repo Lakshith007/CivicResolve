@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { recordAuditLog } from '@/lib/auditStore';
 import { checkRateLimit, getClientIp, requireWorker, verifySameOrigin } from '@/lib/authGuards';
-import { syncStatusUpdateToFirestore } from '@/lib/firebase';
+import { syncIssueToFirestore } from '@/lib/firebase';
 import {
   getDashboardStats,
   getIssueById,
+  hydrateIssuesFromFirestore,
   submitFieldCompletionProof,
   toPublicIssue,
 } from '@/lib/issueStore';
@@ -55,6 +56,7 @@ export async function POST(request: Request) {
       );
     }
 
+    await hydrateIssuesFromFirestore();
     const existing = getIssueById(ticketId);
     if (!existing) {
       return NextResponse.json({ error: 'Complaint ticket not found.' }, { status: 404 });
@@ -111,11 +113,7 @@ export async function POST(request: Request) {
       reason: completionNotes,
     });
 
-    // Non-blocking Firestore mirror
-    void syncStatusUpdateToFirestore(ticketId, {
-      fieldVerification: result.issue.fieldVerification,
-      statusHistory: result.issue.statusHistory,
-    });
+    await syncIssueToFirestore(result.issue);
 
     return NextResponse.json(
       {

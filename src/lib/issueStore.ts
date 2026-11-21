@@ -12,6 +12,7 @@ import type {
 } from '@/types/civic';
 import type { SanitizedIssueSubmission, SanitizedStatusUpdate } from '@/lib/validation';
 import { classifyWithHeuristic } from '@/lib/aiClassifier';
+import { fetchIssuesFromFirestore } from '@/lib/firebase';
 
 const DATA_FILE_PATH = path.join(process.cwd(), 'data', 'issues.json');
 
@@ -713,6 +714,37 @@ export function getDashboardStats(issuesList?: CivicIssue[]): DashboardStats {
     averageUrgency: issues.length > 0 ? Math.round(urgencySum / issues.length) : 0,
     departmentBreakdown,
   };
+}
+
+export async function hydrateIssuesFromFirestore(): Promise<CivicIssue[]> {
+  const local = loadIssues();
+  const remote = await fetchIssuesFromFirestore();
+  if (!remote || remote.length === 0) {
+    return local;
+  }
+
+  const mergedMap = new Map<string, CivicIssue>();
+  for (const issue of local) {
+    mergedMap.set(issue.id, issue);
+  }
+  for (const rIssue of remote) {
+    const existing = mergedMap.get(rIssue.id);
+    if (!existing) {
+      mergedMap.set(rIssue.id, rIssue);
+    } else {
+      const existingTime = new Date(existing.updatedAt || existing.createdAt).getTime();
+      const remoteTime = new Date(rIssue.updatedAt || rIssue.createdAt).getTime();
+      if (remoteTime >= existingTime) {
+        mergedMap.set(rIssue.id, { ...existing, ...rIssue });
+      }
+    }
+  }
+
+  const merged = Array.from(mergedMap.values()).sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+  memoryCache = cloneIssues(merged);
+  return merged;
 }
 
 export function resetIssueStoreForTesting(): void {

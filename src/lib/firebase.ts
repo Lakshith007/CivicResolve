@@ -5,10 +5,9 @@ import {
   getDocs,
   getFirestore,
   setDoc,
-  updateDoc,
   type Firestore,
 } from 'firebase/firestore';
-import type { CivicIssue } from '@/types/civic';
+import type { AuditLogEntry, CivicIssue } from '@/types/civic';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim() || '',
@@ -21,6 +20,7 @@ const firebaseConfig = {
 };
 
 export function isFirebaseConfigured(): boolean {
+  if (process.env.NODE_ENV === 'test') return false;
   return Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
 }
 
@@ -41,6 +41,15 @@ export function getFirebaseDb(): Firestore | null {
     firestoreInstance = getFirestore(app);
   }
   return firestoreInstance;
+}
+
+function withTimeout<T>(promise: Promise<T>, ms = 4000): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Firestore operation timed out after ${ms}ms`)), ms)
+    ),
+  ]);
 }
 
 /**
@@ -77,8 +86,8 @@ function removeUndefinedFields<T extends Record<string, unknown>>(obj: T): Recor
 }
 
 /**
- * Asynchronously mirrors a newly created issue to Google Cloud Firestore (collection 'civic_issues').
- * Resilient: if Firestore rules are locked or offline, logs diagnostic warning and does not block the app.
+ * Persists a newly created or updated issue to Google Cloud Firestore (collection 'civic_issues').
+ * Uses setDoc with merge: true so both new and seeded issues persist cleanly across serverless containers.
  */
 export async function syncIssueToFirestore(issue: CivicIssue): Promise<boolean> {
   try {
@@ -89,18 +98,17 @@ export async function syncIssueToFirestore(issue: CivicIssue): Promise<boolean> 
       ...issue,
       syncedAt: new Date().toISOString(),
     } as unknown as Record<string, unknown>);
-    await setDoc(issueRef, cleaned);
+    await withTimeout(setDoc(issueRef, cleaned, { merge: true }));
     return true;
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
-    // Non-blocking fallback: never fail citizen reporting if external Firestore rules reject
     console.warn(`[Firebase Firestore Sync] Notice for ${issue.id}: ${errorMsg}`);
     return false;
   }
 }
 
 /**
- * Asynchronously mirrors an issue status/admin update to Firestore.
+ * Persists an issue update (status, triage, upvotes, or field verification) to Firestore.
  */
 export async function syncStatusUpdateToFirestore(
   ticketId: string,
@@ -112,9 +120,10 @@ export async function syncStatusUpdateToFirestore(
     const issueRef = doc(db, 'civic_issues', ticketId);
     const cleaned = removeUndefinedFields({
       ...updateData,
-      updatedAt: new Date().toISOString(),
+      id: ticketId,
+      updatedAt: updateData.updatedAt || new Date().toISOString(),
     } as unknown as Record<string, unknown>);
-    await updateDoc(issueRef, cleaned);
+    await withTimeout(setDoc(issueRef, cleaned, { merge: true }));
     return true;
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
@@ -124,15 +133,50 @@ export async function syncStatusUpdateToFirestore(
 }
 
 /**
- * Fetches issues stored in Firestore if available.
+ * Fetches all issues stored in Firestore across serverless containers.
  */
 export async function fetchIssuesFromFirestore(): Promise<CivicIssue[] | null> {
   try {
     const db = getFirebaseDb();
     if (!db) return null;
-    const snap = await getDocs(collection(db, 'civic_issues'));
-    if (snap.empty) return null;
-    return snap.docs.map((d) => d.data() as CivicIssue);
+    const snap = await withTimeout(getDocs(collection(db, 'civic_issues')));
+    if (snap.empty) return [];
+    return snap.docs.map((d) => d.data() as CivicIssue).filter((i) => Boolean(i?.id && i?.title));
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.warn(`[Firebase Firestore Fetch] Notice: ${errorMsg}`);
+    return null;
+  }
+}
+
+/**
+ * Mirrors an immutable audit log entry to Firestore (collection 'civic_audit_logs').
+ */
+export async function syncAuditLogToFirestore(entry: AuditLogEntry): Promise<boolean> {
+  try {
+    const db = getFirebaseDb();
+    if (!db) return false;
+    const ref = doc(db, 'civic_audit_logs', entry.id);
+    const cleaned = removeUndefinedFields(entry as unknown as Record<string, unknown>);
+    await withTimeout(setDoc(ref, cleaned, { merge: true }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Fetches immutable audit logs from Firestore.
+ */
+export async function fetchAuditLogsFromFirestore(): Promise<AuditLogEntry[] | null> {
+  try {
+    const db = getFirebaseDb();
+    if (!db) return null;
+    const snap = await withTimeout(getDocs(collection(db, 'civic_audit_logs')));
+    if (snap.empty) return [];
+    return snap.docs
+      .map((d) => d.data() as AuditLogEntry)
+      .filter((e) => Boolean(e?.id && e?.timestamp));
   } catch {
     return null;
   }

@@ -1,15 +1,17 @@
 import { NextResponse } from 'next/server';
-import { getAuditLogs } from '@/lib/auditStore';
+import { hydrateAuditLogsFromFirestore } from '@/lib/auditStore';
 import { requireAdmin } from '@/lib/authGuards';
-import { getAllIssues, getDashboardStats } from '@/lib/issueStore';
+import { getDashboardStats, hydrateIssuesFromFirestore } from '@/lib/issueStore';
 
 export async function GET(request: Request) {
   const guard = requireAdmin(request);
   if (!guard.ok) return guard.response;
 
-  const issues = getAllIssues();
+  const [issues, auditLogs] = await Promise.all([
+    hydrateIssuesFromFirestore(),
+    hydrateAuditLogsFromFirestore(50),
+  ]);
   const stats = getDashboardStats(issues);
-  const auditLogs = getAuditLogs(50);
 
   return NextResponse.json({
     stats,

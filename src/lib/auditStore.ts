@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import type { AuditLogEntry, SessionUser } from '@/types/civic';
+import { fetchAuditLogsFromFirestore, syncAuditLogToFirestore } from '@/lib/firebase';
 
 const AUDIT_FILE_PATH = path.join(process.cwd(), 'data', 'audit-logs.json');
 
@@ -75,11 +76,30 @@ export function recordAuditLog(params: {
 
   logs.unshift(entry);
   persistLogs(logs.slice(0, 500));
+  void syncAuditLogToFirestore(entry);
   return cloneLogs([entry])[0];
 }
 
 export function getAuditLogs(limit = 50): AuditLogEntry[] {
   return loadLogs().slice(0, limit);
+}
+
+export async function hydrateAuditLogsFromFirestore(limit = 50): Promise<AuditLogEntry[]> {
+  const local = loadLogs();
+  const remote = await fetchAuditLogsFromFirestore();
+  if (!remote || remote.length === 0) {
+    return local.slice(0, limit);
+  }
+
+  const mergedMap = new Map<string, AuditLogEntry>();
+  for (const l of local) mergedMap.set(l.id, l);
+  for (const r of remote) mergedMap.set(r.id, r);
+
+  const merged = Array.from(mergedMap.values()).sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
+  globalForAudit.__civicAuditCache = cloneLogs(merged.slice(0, 500));
+  return merged.slice(0, limit);
 }
 
 export function resetAuditStoreForTesting(): void {

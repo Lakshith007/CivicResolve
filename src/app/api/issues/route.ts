@@ -11,6 +11,7 @@ import {
   createIssue,
   getAllIssues,
   getDashboardStats,
+  hydrateIssuesFromFirestore,
   toPublicIssue,
 } from '@/lib/issueStore';
 import { syncIssueToFirestore } from '@/lib/firebase';
@@ -32,7 +33,7 @@ export async function GET(request: Request) {
     viewer = citizenGuard.user;
   }
 
-  const allIssues = getAllIssues();
+  const allIssues = await hydrateIssuesFromFirestore();
 
   const filtered = allIssues.filter((issue) => {
     if (scope === 'mine' && issue.reporterUserId !== viewer?.id) return false;
@@ -92,7 +93,7 @@ export async function POST(request: Request) {
       userCategory: submission.userCategory,
     });
 
-    const existingIssues = getAllIssues();
+    const existingIssues = await hydrateIssuesFromFirestore();
     const duplicates = findPotentialDuplicates(
       {
         title: submission.title,
@@ -108,8 +109,8 @@ export async function POST(request: Request) {
       reporterUserId: viewer?.id,
     });
 
-    // Asynchronously mirror to Google Firebase Firestore (non-blocking fallback)
-    void syncIssueToFirestore(created);
+    // Await Firestore persistence so Vercel serverless containers share the new ticket immediately
+    await syncIssueToFirestore(created);
 
     return NextResponse.json(
       {
