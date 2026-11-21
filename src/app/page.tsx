@@ -255,7 +255,7 @@ export default function HomePage() {
           setCurrentUser(user);
           void fetchIssues();
         }}
-        redirectToAdmin={false}
+        redirectToAdmin={true}
       />
     </div>
   );

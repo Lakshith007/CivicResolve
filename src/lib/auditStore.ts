@@ -35,6 +35,7 @@ function loadLogs(): AuditLogEntry[] {
 
 function persistLogs(logs: AuditLogEntry[]): void {
   globalForAudit.__civicAuditCache = cloneLogs(logs);
+  if (process.env.NODE_ENV === 'test') return;
   try {
     const dir = path.dirname(AUDIT_FILE_PATH);
     if (!fs.existsSync(dir)) {

@@ -2,14 +2,25 @@
 
 import React, { useMemo, useState } from 'react';
 import {
+  Activity,
   AlertCircle,
+  AlertTriangle,
+  BarChart3,
   Building2,
   CheckCircle2,
+  ClipboardCheck,
   ClipboardEdit,
+  Clock,
   FileClock,
+  Filter,
   Loader2,
+  MapPin,
+  Search,
+  Send,
   ShieldCheck,
   SlidersHorizontal,
+  Sparkles,
+  Timer,
   Upload,
   X,
 } from 'lucide-react';
@@ -25,11 +36,24 @@ import {
   type IssueStatus,
 } from '@/types/civic';
 import { PriorityBadge, StatusBadge } from '@/components/CivicBadges';
+import { AdminHotspotMap } from '@/components/AdminHotspotMap';
+
+export type AdminSection =
+  | 'overview'
+  | 'complaints'
+  | 'departments'
+  | 'geography'
+  | 'reports'
+  | 'audit';
 
 interface AdminDashboardProps {
+  activeSection: AdminSection;
+  onNavigateSection: (section: AdminSection) => void;
   issues: CivicIssue[];
   stats: DashboardStats;
   auditLogs?: AuditLogEntry[];
+  selectedIssueFromHeader?: CivicIssue | null;
+  onClearHeaderSelection?: () => void;
   onUpdateIssue: (
     id: string,
     payload: {
@@ -43,14 +67,67 @@ interface AdminDashboardProps {
   ) => Promise<{ ok: boolean; error?: string }>;
 }
 
+type QueueFilter = 'active' | 'all' | 'resolved' | IssuePriority;
+
+function formatRelativeAge(isoDate: string): string {
+  const diffMs = Math.max(0, Date.now() - new Date(isoDate).getTime());
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ${hrs % 24}h ago`;
+}
+
+function formatDurationHours(hours: number | null): string {
+  if (hours === null || !Number.isFinite(hours)) return 'N/A';
+  if (hours < 1) return `${Math.max(1, Math.round(hours * 60))} mins`;
+  if (hours < 48) return `${hours.toFixed(1)} hrs`;
+  return `${(hours / 24).toFixed(1)} days`;
+}
+
+function isIssueOverdue(issue: CivicIssue): boolean {
+  if (issue.status === 'Resolved') return false;
+  const ageHours = (Date.now() - new Date(issue.createdAt).getTime()) / 3_600_000;
+  // SLA thresholds: Critical > 6h, High > 24h, Medium/Low > 72h
+  if (issue.priority === 'Critical') return ageHours > 6;
+  if (issue.priority === 'High') return ageHours > 24;
+  return ageHours > 72;
+}
+
+function computeAvgResolutionHours(list: CivicIssue[]): number | null {
+  const resolved = list.filter((i) => i.status === 'Resolved');
+  if (resolved.length === 0) return null;
+  const totalHours = resolved.reduce((acc, issue) => {
+    const start = new Date(issue.createdAt).getTime();
+    const end = new Date(issue.updatedAt).getTime();
+    const diffHours = Math.max(0, (end - start) / 3_600_000);
+    return acc + diffHours;
+  }, 0);
+  return totalHours / resolved.length;
+}
+
 export function AdminDashboard({
+  activeSection,
+  onNavigateSection,
   issues,
   stats,
   auditLogs = [],
+  selectedIssueFromHeader,
+  onClearHeaderSelection,
   onUpdateIssue,
 }: AdminDashboardProps) {
-  const [queueFilter, setQueueFilter] = useState<'active' | 'all' | 'resolved'>('active');
+  const [queueFilter, setQueueFilter] = useState<QueueFilter>('active');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState<'All' | Department>('All');
+  const [inspectedDepartment, setInspectedDepartment] = useState<Department | null>(null);
+  const [auditFilter, setAuditFilter] = useState<string>('ALL');
+
+  // Triage modal state
   const [editingIssue, setEditingIssue] = useState<CivicIssue | null>(null);
+  const [modalFocusHint, setModalFocusHint] = useState<'general' | 'department' | 'priority'>(
+    'general'
+  );
   const [status, setStatus] = useState<IssueStatus>('In Progress');
   const [department, setDepartment] = useState<Department>(DEPARTMENTS[0]);
   const [priority, setPriority] = useState<IssuePriority>('High');
@@ -61,18 +138,12 @@ export function AdminDashboard({
   const [isSaving, setIsSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const sortedQueue = useMemo(() => {
-    return [...issues]
-      .filter((issue) => {
-        if (queueFilter === 'active') return issue.status !== 'Resolved';
-        if (queueFilter === 'resolved') return issue.status === 'Resolved';
-        return true;
-      })
-      .sort((a, b) => b.urgencyScore - a.urgencyScore);
-  }, [issues, queueFilter]);
-
-  const openTriageModal = (issue: CivicIssue) => {
+  const openTriageModal = (
+    issue: CivicIssue,
+    focus: 'general' | 'department' | 'priority' = 'general'
+  ) => {
     setEditingIssue(issue);
+    setModalFocusHint(focus);
     setStatus(issue.status);
     setDepartment(issue.department);
     setPriority(issue.priority);
@@ -81,6 +152,115 @@ export function AdminDashboard({
     setResolutionEvidenceUrl(issue.resolutionEvidenceUrl);
     setModalError(null);
   };
+
+  // Open modal when header notification selects a complaint
+  React.useEffect(() => {
+    if (selectedIssueFromHeader) {
+      openTriageModal(selectedIssueFromHeader, 'general');
+      onClearHeaderSelection?.();
+    }
+  }, [selectedIssueFromHeader, onClearHeaderSelection]);
+
+  // Real calculated KPIs from live issue records
+  const kpis = useMemo(() => {
+    const total = issues.length;
+    const awaitingDispatch = issues.filter((i) => i.status === 'Reported').length;
+    const inProgress = issues.filter((i) => i.status === 'In Progress').length;
+    const resolved = issues.filter((i) => i.status === 'Resolved').length;
+    const criticalActive = issues.filter(
+      (i) => i.priority === 'Critical' && i.status !== 'Resolved'
+    ).length;
+    const avgResolutionHours = computeAvgResolutionHours(issues);
+    const resolutionRate = total > 0 ? Math.round((resolved / total) * 100) : 0;
+
+    return {
+      total,
+      awaitingDispatch,
+      inProgress,
+      resolved,
+      criticalActive,
+      avgResolutionHours,
+      resolutionRate,
+    };
+  }, [issues]);
+
+  // Critical & High priority active alerts sorted by priority & urgency score
+  const criticalAlerts = useMemo(() => {
+    const weight: Record<IssuePriority, number> = {
+      Critical: 4,
+      High: 3,
+      Medium: 2,
+      Low: 1,
+    };
+    return [...issues]
+      .filter((i) => i.status !== 'Resolved' && (i.priority === 'Critical' || i.priority === 'High'))
+      .sort((a, b) => {
+        if (weight[b.priority] !== weight[a.priority]) {
+          return weight[b.priority] - weight[a.priority];
+        }
+        return b.urgencyScore - a.urgencyScore;
+      });
+  }, [issues]);
+
+  // Department workload metrics derived strictly from actual records
+  const departmentMetrics = useMemo(() => {
+    const totalActive = issues.filter((i) => i.status !== 'Resolved').length;
+    return DEPARTMENTS.map((dept) => {
+      const deptIssues = issues.filter((i) => i.department === dept);
+      const pending = deptIssues.filter((i) => i.status === 'Reported').length;
+      const inProgress = deptIssues.filter((i) => i.status === 'In Progress').length;
+      const resolved = deptIssues.filter((i) => i.status === 'Resolved').length;
+      const active = pending + inProgress;
+      const overdue = deptIssues.filter(isIssueOverdue).length;
+      const critical = deptIssues.filter(
+        (i) => i.priority === 'Critical' && i.status !== 'Resolved'
+      ).length;
+      const avgResHours = computeAvgResolutionHours(deptIssues);
+      const activeSharePct = totalActive > 0 ? Math.round((active / totalActive) * 100) : 0;
+
+      return {
+        department: dept,
+        total: deptIssues.length,
+        pending,
+        inProgress,
+        resolved,
+        active,
+        overdue,
+        critical,
+        avgResHours,
+        activeSharePct,
+        issues: deptIssues,
+      };
+    }).sort((a, b) => b.active - a.active || b.total - a.total);
+  }, [issues]);
+
+  // Filtered Priority Triage Queue
+  const filteredQueue = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return [...issues]
+      .filter((issue) => {
+        if (queueFilter === 'active' && issue.status === 'Resolved') return false;
+        if (queueFilter === 'resolved' && issue.status !== 'Resolved') return false;
+        if (
+          ISSUE_PRIORITIES.includes(queueFilter as IssuePriority) &&
+          issue.priority !== queueFilter
+        ) {
+          return false;
+        }
+        if (departmentFilter !== 'All' && issue.department !== departmentFilter) return false;
+        if (q) {
+          const hay = `${issue.id} ${issue.title} ${issue.description} ${issue.location} ${issue.ward} ${issue.department} ${issue.category}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => b.urgencyScore - a.urgencyScore);
+  }, [issues, queueFilter, departmentFilter, searchQuery]);
+
+  const filteredAuditLogs = useMemo(() => {
+    if (auditFilter === 'ALL') return auditLogs;
+    return auditLogs.filter((l) => l.action.includes(auditFilter));
+  }, [auditLogs, auditFilter]);
 
   const handleEvidenceUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -110,7 +290,7 @@ export function AdminDashboard({
 
     if (priority !== editingIssue.priority && priorityOverrideReason.trim().length < 5) {
       setModalError(
-        'Please enter a clear justification (5+ chars) when overriding the AI priority.'
+        'A clear justification (5+ characters) is mandatory when overriding AI priority.'
       );
       return;
     }
@@ -146,16 +326,833 @@ export function AdminDashboard({
       priority: issue.priority,
       adminNotes:
         nextStatus === 'In Progress'
-          ? `Dispatched ${issue.department} crew.`
-          : `Verified completed and closed by municipal supervisor.`,
+          ? `Field crew dispatched by Municipal Command (${issue.department}).`
+          : `Resolution verified and ticket closed by Municipal Supervisor.`,
     });
     if (result.ok) {
-      setToastMessage(`Quick action: ${issue.id} marked ${nextStatus}.`);
+      setToastMessage(`${issue.id} updated to ${nextStatus}.`);
     }
   };
 
-  const resolutionRate =
-    stats.total > 0 ? Math.round((stats.resolved / stats.total) * 100) : 0;
+  // ---------- REUSABLE SECTIONS ----------
+
+  const renderKpiCards = () => (
+    <section aria-label="Municipal performance KPIs" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            Total Complaints
+          </p>
+          <Activity className="h-4 w-4 text-blue-700" aria-hidden="true" />
+        </div>
+        <p className="mt-2 text-2xl font-extrabold text-slate-900">{kpis.total}</p>
+        <p className="mt-0.5 text-[11px] text-slate-500">Avg Urgency: {stats.averageUrgency}/100</p>
+      </div>
+
+      <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-800">
+            Awaiting Dispatch
+          </p>
+          <Clock className="h-4 w-4 text-amber-700" aria-hidden="true" />
+        </div>
+        <p className="mt-2 text-2xl font-extrabold text-amber-950">{kpis.awaitingDispatch}</p>
+        <p className="mt-0.5 text-[11px] text-amber-800">Requires crew assignment</p>
+      </div>
+
+      <div className="rounded-2xl border border-blue-200 bg-blue-50/50 p-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-800">
+            In Progress
+          </p>
+          <Send className="h-4 w-4 text-blue-700" aria-hidden="true" />
+        </div>
+        <p className="mt-2 text-2xl font-extrabold text-blue-950">{kpis.inProgress}</p>
+        <p className="mt-0.5 text-[11px] text-blue-800">Active field operations</p>
+      </div>
+
+      <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800">
+            Resolved
+          </p>
+          <CheckCircle2 className="h-4 w-4 text-emerald-700" aria-hidden="true" />
+        </div>
+        <p className="mt-2 text-2xl font-extrabold text-emerald-950">{kpis.resolved}</p>
+        <p className="mt-0.5 text-[11px] text-emerald-800">{kpis.resolutionRate}% closure rate</p>
+      </div>
+
+      <div className="rounded-2xl border border-red-200 bg-red-50/60 p-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-red-800">
+            Critical Active
+          </p>
+          <AlertTriangle className="h-4 w-4 text-red-700" aria-hidden="true" />
+        </div>
+        <p className="mt-2 text-2xl font-extrabold text-red-900">{kpis.criticalActive}</p>
+        <p className="mt-0.5 text-[11px] text-red-800">Immediate SLA escalation</p>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            Avg Resolution
+          </p>
+          <Timer className="h-4 w-4 text-slate-700" aria-hidden="true" />
+        </div>
+        <p className="mt-2 text-2xl font-extrabold text-slate-900">
+          {formatDurationHours(kpis.avgResolutionHours)}
+        </p>
+        <p className="mt-0.5 text-[11px] text-slate-500">
+          Based on {kpis.resolved} resolved ticket{kpis.resolved === 1 ? '' : 's'}
+        </p>
+      </div>
+    </section>
+  );
+
+  const renderCriticalAlerts = () => (
+    <section
+      aria-labelledby="critical-alerts-heading"
+      className="rounded-2xl border border-red-200/80 bg-white p-5 shadow-sm"
+    >
+      <div className="flex flex-col gap-2 border-b border-slate-100 pb-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2
+            id="critical-alerts-heading"
+            className="flex items-center gap-2 text-base font-bold text-slate-900"
+          >
+            <AlertTriangle className="h-4 w-4 text-red-600" aria-hidden="true" />
+            <span>Critical Infrastructure Alerts</span>
+            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-800">
+              {criticalAlerts.length} active
+            </span>
+          </h2>
+          <p className="text-xs text-slate-500">
+            High-impact public safety &amp; infrastructure complaints sorted by Gemini AI urgency score
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setQueueFilter('Critical');
+            onNavigateSection('complaints');
+          }}
+          className="text-xs font-semibold text-blue-700 hover:underline"
+        >
+          View full triage queue →
+        </button>
+      </div>
+
+      {criticalAlerts.length === 0 ? (
+        <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 text-center text-xs font-medium text-emerald-900">
+          All Critical and High priority civic alerts have been resolved.
+        </div>
+      ) : (
+        <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {criticalAlerts.slice(0, 4).map((alert) => {
+            const isCritical = alert.priority === 'Critical';
+            return (
+              <div
+                key={alert.id}
+                className={`flex flex-col justify-between rounded-xl border p-4 transition ${
+                  isCritical
+                    ? 'border-red-200 bg-red-50/30 hover:border-red-300'
+                    : 'border-amber-200 bg-amber-50/20 hover:border-amber-300'
+                }`}
+              >
+                <div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-bold text-blue-700">{alert.id}</span>
+                      <PriorityBadge priority={alert.priority} />
+                      <StatusBadge status={alert.status} />
+                    </div>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-2.5 py-0.5 text-[11px] font-bold text-white">
+                      AI Urgency {alert.urgencyScore}/100
+                    </span>
+                  </div>
+
+                  <h3 className="mt-2 text-sm font-bold text-slate-900">{alert.title}</h3>
+
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
+                    <span className="inline-flex items-center gap-1">
+                      <MapPin className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                      {alert.location} ({alert.ward.split('—')[0].trim()})
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <Building2 className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                      {alert.department}
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-slate-500">
+                      <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+                      {formatRelativeAge(alert.createdAt)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-slate-200/70 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => openTriageModal(alert, 'general')}
+                    className="focus-ring rounded-lg bg-slate-900 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-slate-800"
+                  >
+                    Review Complaint
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openTriageModal(alert, 'department')}
+                    className="focus-ring rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Assign Department
+                  </button>
+                  {alert.status === 'Reported' && (
+                    <button
+                      type="button"
+                      onClick={() => handleQuickAdvance(alert, 'In Progress')}
+                      className="focus-ring rounded-lg bg-blue-700 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-800"
+                    >
+                      Dispatch Crew
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => openTriageModal(alert, 'priority')}
+                    className="focus-ring rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] font-semibold text-amber-900 hover:bg-amber-100"
+                  >
+                    Update Priority
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+
+  const renderDepartmentWorkload = (expanded = false) => (
+    <section
+      aria-labelledby="department-workload-heading"
+      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+    >
+      <div className="flex flex-col gap-1 border-b border-slate-100 pb-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2
+            id="department-workload-heading"
+            className="flex items-center gap-2 text-base font-bold text-slate-900"
+          >
+            <Building2 className="h-4 w-4 text-blue-700" aria-hidden="true" />
+            <span>Department Workload &amp; Performance</span>
+          </h2>
+          <p className="text-xs text-slate-500">
+            Live division assignments calculated from database records (workload bar = share of active citywide queue)
+          </p>
+        </div>
+        {!expanded && (
+          <button
+            type="button"
+            onClick={() => onNavigateSection('departments')}
+            className="text-xs font-semibold text-blue-700 hover:underline"
+          >
+            Inspect divisions →
+          </button>
+        )}
+      </div>
+
+      <div className={`mt-4 grid gap-3 ${expanded ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
+        {departmentMetrics.map((m) => {
+          const isInspected = inspectedDepartment === m.department;
+          return (
+            <div
+              key={m.department}
+              className={`rounded-xl border p-3.5 transition ${
+                isInspected
+                  ? 'border-blue-400 bg-blue-50/40 ring-1 ring-blue-200'
+                  : 'border-slate-200 bg-slate-50/50 hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h3 className="text-xs font-bold text-slate-900">{m.department}</h3>
+                  <p className="mt-0.5 text-[11px] text-slate-500">
+                    Total Assigned: <strong className="text-slate-800">{m.total}</strong> · Avg
+                    Resolution:{' '}
+                    <strong className="text-slate-800">{formatDurationHours(m.avgResHours)}</strong>
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {m.overdue > 0 && (
+                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-800">
+                      {m.overdue} overdue
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (expanded) {
+                        setInspectedDepartment(isInspected ? null : m.department);
+                      } else {
+                        setDepartmentFilter(m.department);
+                        onNavigateSection('complaints');
+                      }
+                    }}
+                    className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[10px] font-semibold text-slate-700 hover:bg-slate-100"
+                  >
+                    {expanded ? (isInspected ? 'Hide Tickets' : 'Inspect') : 'Filter Queue'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Counts row */}
+              <div className="mt-2.5 grid grid-cols-4 gap-1.5 text-center text-[11px]">
+                <div className="rounded-lg bg-white px-2 py-1 border border-slate-200/80">
+                  <span className="block font-bold text-amber-800">{m.pending}</span>
+                  <span className="text-[10px] text-slate-500">Pending</span>
+                </div>
+                <div className="rounded-lg bg-white px-2 py-1 border border-slate-200/80">
+                  <span className="block font-bold text-blue-800">{m.inProgress}</span>
+                  <span className="text-[10px] text-slate-500">In Progress</span>
+                </div>
+                <div className="rounded-lg bg-white px-2 py-1 border border-slate-200/80">
+                  <span className="block font-bold text-emerald-800">{m.resolved}</span>
+                  <span className="text-[10px] text-slate-500">Resolved</span>
+                </div>
+                <div className="rounded-lg bg-white px-2 py-1 border border-slate-200/80">
+                  <span className="block font-bold text-slate-900">{m.activeSharePct}%</span>
+                  <span className="text-[10px] text-slate-500">Active Share</span>
+                </div>
+              </div>
+
+              {/* Visual workload bar */}
+              <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    m.critical > 0
+                      ? 'bg-red-600'
+                      : m.activeSharePct >= 30
+                      ? 'bg-amber-500'
+                      : 'bg-blue-600'
+                  }`}
+                  style={{ width: `${Math.min(100, m.activeSharePct)}%` }}
+                />
+              </div>
+
+              {/* Inline expanded ticket inspection */}
+              {expanded && isInspected && (
+                <div className="mt-3 space-y-2 border-t border-slate-200 pt-3">
+                  {m.issues.length === 0 ? (
+                    <p className="text-xs text-slate-500">No complaints currently assigned.</p>
+                  ) : (
+                    m.issues.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono font-bold text-blue-700">{item.id}</span>
+                            <PriorityBadge priority={item.priority} />
+                            <StatusBadge status={item.status} />
+                          </div>
+                          <p className="mt-0.5 truncate font-semibold text-slate-900">
+                            {item.title}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => openTriageModal(item, 'general')}
+                          className="shrink-0 rounded-lg bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-slate-800"
+                        >
+                          Manage
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="mt-3 text-[11px] text-slate-500">
+        Note: Individual division crew headcount/capacity ceilings are not stored in the current
+        database; workload utilization reflects each division&apos;s live share of active municipal
+        complaints.
+      </p>
+    </section>
+  );
+
+  const renderTriageQueue = (maxRows?: number) => {
+    const visibleRows = maxRows ? filteredQueue.slice(0, maxRows) : filteredQueue;
+    return (
+      <section
+        aria-labelledby="triage-queue-heading"
+        className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+      >
+        <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2
+              id="triage-queue-heading"
+              className="flex items-center gap-2 text-base font-bold text-slate-900"
+            >
+              <SlidersHorizontal className="h-4 w-4 text-blue-700" aria-hidden="true" />
+              <span>Priority Triage Queue</span>
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">
+                {filteredQueue.length} ticket{filteredQueue.length === 1 ? '' : 's'}
+              </span>
+            </h2>
+            <p className="text-xs text-slate-500">
+              Ranked by Gemini AI urgency score · Protected mutations persist to database &amp; audit trail
+            </p>
+          </div>
+
+          {/* Search & Department Filter */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 sm:w-64 sm:flex-none">
+              <Search
+                className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400"
+                aria-hidden="true"
+              />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search ID, location, keyword, dept..."
+                aria-label="Search complaints"
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-xs text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none"
+              />
+            </div>
+
+            <select
+              value={departmentFilter}
+              onChange={(e) => setDepartmentFilter(e.target.value as 'All' | Department)}
+              aria-label="Filter queue by department"
+              className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none"
+            >
+              <option value="All">All Departments</option>
+              {DEPARTMENTS.map((dept) => (
+                <option key={dept} value={dept}>
+                  {dept}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Filter Pills */}
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {(
+            [
+              { key: 'active', label: 'Active Queue' },
+              { key: 'all', label: 'All Tickets' },
+              { key: 'resolved', label: 'Resolved' },
+              { key: 'Critical', label: 'Critical' },
+              { key: 'High', label: 'High' },
+              { key: 'Medium', label: 'Medium' },
+              { key: 'Low', label: 'Low' },
+            ] as Array<{ key: QueueFilter; label: string }>
+          ).map((pill) => (
+            <button
+              key={pill.key}
+              type="button"
+              onClick={() => setQueueFilter(pill.key)}
+              className={`focus-ring rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                queueFilter === pill.key
+                  ? 'bg-blue-700 text-white shadow-sm'
+                  : 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              {pill.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Table */}
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-200 text-left text-xs">
+            <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-3 py-2.5">Complaint</th>
+                <th className="px-3 py-2.5">AI Score &amp; Priority</th>
+                <th className="px-3 py-2.5">Assigned Department</th>
+                <th className="px-3 py-2.5">Reported</th>
+                <th className="px-3 py-2.5">Status</th>
+                <th className="px-3 py-2.5 text-right">Dispatch Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 bg-white">
+              {visibleRows.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-3 py-8 text-center text-slate-500">
+                    No complaints match the current filter criteria.
+                  </td>
+                </tr>
+              ) : (
+                visibleRows.map((issue) => (
+                  <tr key={issue.id} className="hover:bg-slate-50/70">
+                    <td className="max-w-xs px-3 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-blue-700">{issue.id}</span>
+                        {isIssueOverdue(issue) && (
+                          <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-800">
+                            OVERDUE
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-0.5 font-semibold text-slate-900">{issue.title}</p>
+                      <p className="mt-0.5 line-clamp-1 text-[11px] text-slate-500">
+                        {issue.description}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-slate-500">
+                        {issue.location} · {issue.ward.split('—')[0].trim()}
+                      </p>
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="flex flex-col items-start gap-1">
+                        <PriorityBadge priority={issue.priority} />
+                        <span className="font-semibold text-slate-700">
+                          Urgency: {issue.urgencyScore}/100
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 text-slate-700">
+                      <span className="font-medium">{issue.department}</span>
+                      <span className="block text-[11px] text-slate-500">{issue.category}</span>
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-3 text-slate-600">
+                      <span className="block font-medium">
+                        {formatRelativeAge(issue.createdAt)}
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        {new Date(issue.createdAt).toLocaleDateString()}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3">
+                      <StatusBadge status={issue.status} />
+                    </td>
+                    <td className="px-3 py-3 text-right">
+                      <div className="flex flex-wrap justify-end gap-1.5">
+                        {issue.status === 'Reported' && (
+                          <button
+                            type="button"
+                            onClick={() => handleQuickAdvance(issue, 'In Progress')}
+                            className="focus-ring rounded-lg border border-blue-300 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-800 hover:bg-blue-100"
+                          >
+                            Dispatch
+                          </button>
+                        )}
+                        {issue.status === 'In Progress' && (
+                          <button
+                            type="button"
+                            onClick={() => handleQuickAdvance(issue, 'Resolved')}
+                            className="focus-ring rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-800 hover:bg-emerald-100"
+                          >
+                            Mark Resolved
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => openTriageModal(issue, 'general')}
+                          className="focus-ring inline-flex items-center gap-1 rounded-lg bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-slate-800"
+                        >
+                          <ClipboardEdit className="h-3 w-3" aria-hidden="true" />
+                          <span>Manage</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {maxRows && filteredQueue.length > maxRows && (
+          <div className="mt-3 text-right">
+            <button
+              type="button"
+              onClick={() => onNavigateSection('complaints')}
+              className="text-xs font-semibold text-blue-700 hover:underline"
+            >
+              Show all {filteredQueue.length} complaints in Complaint Management →
+            </button>
+          </div>
+        )}
+      </section>
+    );
+  };
+
+  const renderAuditLogs = (maxRows?: number) => {
+    const visible = maxRows ? filteredAuditLogs.slice(0, maxRows) : filteredAuditLogs;
+    return (
+      <section
+        aria-labelledby="audit-log-heading"
+        className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+      >
+        <div className="flex flex-col gap-2 border-b border-slate-100 pb-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2
+              id="audit-log-heading"
+              className="flex items-center gap-2 text-base font-bold text-slate-900"
+            >
+              <FileClock className="h-4 w-4 text-blue-700" aria-hidden="true" />
+              <span>Administrative Activity &amp; Immutable Audit Logs</span>
+            </h2>
+            <p className="text-xs text-slate-500">
+              Append-only municipal log of assignments, priority overrides, status transitions &amp; admin auth events
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {!maxRows && (
+              <select
+                value={auditFilter}
+                onChange={(e) => setAuditFilter(e.target.value)}
+                aria-label="Filter audit logs by action"
+                className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-800"
+              >
+                <option value="ALL">All Actions</option>
+                <option value="ADMIN_TRIAGE">Triage &amp; Dispatch Updates</option>
+                <option value="PRIORITY_OVERRIDE">Priority Overrides</option>
+                <option value="ADMIN_2FA_LOGIN">Admin 2FA Logins</option>
+                <option value="ADMIN_LOGOUT">Admin Logouts</option>
+              </select>
+            )}
+            {maxRows && (
+              <button
+                type="button"
+                onClick={() => onNavigateSection('audit')}
+                className="text-xs font-semibold text-blue-700 hover:underline"
+              >
+                Full audit history →
+              </button>
+            )}
+          </div>
+        </div>
+
+        {visible.length === 0 ? (
+          <p className="mt-4 text-xs text-slate-500">
+            No administrative actions recorded yet in this session. Sign-ins, dispatches, and
+            priority overrides will appear here automatically.
+          </p>
+        ) : (
+          <div className="mt-3 overflow-x-auto">
+            <table className="min-w-full divide-y divide-slate-200 text-left text-xs">
+              <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-3 py-2">Timestamp</th>
+                  <th className="px-3 py-2">Administrator</th>
+                  <th className="px-3 py-2">Action</th>
+                  <th className="px-3 py-2">Target</th>
+                  <th className="px-3 py-2">Changes &amp; Override Reason</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {visible.map((log) => (
+                  <tr key={log.id} className="hover:bg-slate-50/70">
+                    <td className="whitespace-nowrap px-3 py-2.5 text-slate-500">
+                      {new Date(log.timestamp).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <span className="font-semibold text-slate-900">{log.actorEmail}</span>
+                      <span className="block font-mono text-[10px] text-slate-500">
+                        ID: {log.actorId}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <span
+                        className={`inline-block rounded-md px-2 py-0.5 font-mono text-[10px] font-bold ${
+                          log.action.includes('OVERRIDE')
+                            ? 'bg-amber-100 text-amber-900'
+                            : log.action.includes('LOGIN') || log.action.includes('LOGOUT')
+                            ? 'bg-emerald-100 text-emerald-900'
+                            : 'bg-blue-100 text-blue-900'
+                        }`}
+                      >
+                        {log.action}
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2.5 font-mono font-bold text-blue-700">
+                      {log.targetTicketId}
+                    </td>
+                    <td className="px-3 py-2.5 text-slate-700">
+                      {log.previousValues && log.updatedValues && (
+                        <div className="flex flex-wrap gap-1.5 text-[11px]">
+                          {log.previousValues.status !== log.updatedValues.status && (
+                            <span className="rounded bg-slate-100 px-1.5 py-0.5">
+                              Status: {String(log.previousValues.status)} →{' '}
+                              <strong>{String(log.updatedValues.status)}</strong>
+                            </span>
+                          )}
+                          {log.previousValues.priority !== log.updatedValues.priority && (
+                            <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-900">
+                              Priority: {String(log.previousValues.priority)} →{' '}
+                              <strong>{String(log.updatedValues.priority)}</strong>
+                            </span>
+                          )}
+                          {log.previousValues.department !== log.updatedValues.department && (
+                            <span className="rounded bg-blue-50 px-1.5 py-0.5 text-blue-900">
+                              Dept: {String(log.previousValues.department)} →{' '}
+                              <strong>{String(log.updatedValues.department)}</strong>
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {log.reason && (
+                        <p className="mt-1 text-[11px] font-medium text-amber-900">
+                          Reason: &ldquo;{log.reason}&rdquo;
+                        </p>
+                      )}
+                      {!log.previousValues && !log.reason && (
+                        <span className="text-[11px] text-slate-500">
+                          Authenticated municipal event
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    );
+  };
+
+  const renderResolutionReports = () => {
+    const resolvedIssues = issues.filter((i) => i.status === 'Resolved');
+    const priorityCounts = ISSUE_PRIORITIES.map((p) => ({
+      priority: p,
+      total: issues.filter((i) => i.priority === p).length,
+      resolved: issues.filter((i) => i.priority === p && i.status === 'Resolved').length,
+    }));
+
+    return (
+      <div className="space-y-6">
+        {renderKpiCards()}
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* Priority Closure Breakdown */}
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
+              <BarChart3 className="h-4 w-4 text-blue-700" aria-hidden="true" />
+              <span>Resolution Rate by Priority Tier</span>
+            </h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Calculated directly from live database ticket statuses
+            </p>
+            <div className="mt-4 space-y-3">
+              {priorityCounts.map((row) => {
+                const pct = row.total > 0 ? Math.round((row.resolved / row.total) * 100) : 0;
+                return (
+                  <div key={row.priority} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <PriorityBadge priority={row.priority} />
+                      <span className="font-semibold text-slate-700">
+                        {row.resolved} / {row.total} resolved ({pct}%)
+                      </span>
+                    </div>
+                    <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className="h-full rounded-full bg-emerald-600 transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* Department Resolution Summary */}
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
+              <ClipboardCheck className="h-4 w-4 text-blue-700" aria-hidden="true" />
+              <span>Department Turnaround Summary</span>
+            </h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Resolved volume &amp; average closure time per municipal division
+            </p>
+            <div className="mt-4 overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200 text-left text-xs">
+                <thead className="bg-slate-50 text-[11px] font-semibold text-slate-500">
+                  <tr>
+                    <th className="px-2.5 py-2">Division</th>
+                    <th className="px-2.5 py-2 text-center">Resolved</th>
+                    <th className="px-2.5 py-2 text-center">Overdue</th>
+                    <th className="px-2.5 py-2 text-right">Avg Time</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {departmentMetrics.map((m) => (
+                    <tr key={m.department}>
+                      <td className="px-2.5 py-2 font-medium text-slate-800">{m.department}</td>
+                      <td className="px-2.5 py-2 text-center font-bold text-emerald-700">
+                        {m.resolved}/{m.total}
+                      </td>
+                      <td className="px-2.5 py-2 text-center font-bold text-red-700">
+                        {m.overdue}
+                      </td>
+                      <td className="px-2.5 py-2 text-right font-mono text-slate-700">
+                        {formatDurationHours(m.avgResHours)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        {/* Resolved Archive */}
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-base font-bold text-slate-900">
+            Resolved Complaints Archive ({resolvedIssues.length})
+          </h2>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Completed municipal work orders with official closure notes and uploaded evidence
+          </p>
+          {resolvedIssues.length === 0 ? (
+            <p className="mt-4 text-xs text-slate-500">No resolved complaints recorded yet.</p>
+          ) : (
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+              {resolvedIssues.map((item) => (
+                <div
+                  key={item.id}
+                  className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-4 text-xs"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono font-bold text-blue-700">{item.id}</span>
+                    <StatusBadge status={item.status} />
+                  </div>
+                  <h3 className="mt-1.5 text-sm font-bold text-slate-900">{item.title}</h3>
+                  <p className="mt-0.5 text-slate-600">
+                    {item.department} · {item.location}
+                  </p>
+                  {item.adminNotes && (
+                    <p className="mt-2 rounded-lg bg-white p-2 text-slate-700 border border-slate-200">
+                      <strong>Resolution Note:</strong> {item.adminNotes}
+                    </p>
+                  )}
+                  <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
+                    <span>Closed {new Date(item.updatedAt).toLocaleString()}</span>
+                    <button
+                      type="button"
+                      onClick={() => openTriageModal(item, 'general')}
+                      className="font-semibold text-blue-700 hover:underline"
+                    >
+                      Inspect Record
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -172,7 +1169,7 @@ export function AdminDashboard({
           <button
             type="button"
             onClick={() => setToastMessage(null)}
-            aria-label="Dismiss status notification"
+            aria-label="Dismiss notification"
             className="focus-ring rounded p-1 hover:bg-emerald-100"
           >
             <X className="h-4 w-4" aria-hidden="true" />
@@ -180,272 +1177,54 @@ export function AdminDashboard({
         </div>
       )}
 
-      {/* Authority Overview + Department Workload */}
-      <div className="grid gap-6 lg:grid-cols-12">
-        <section
-          aria-label="Department workload breakdown"
-          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-7"
-        >
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <div className="flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-blue-700" aria-hidden="true" />
-              <h2 className="text-base font-bold text-slate-900">Department Workload Routing</h2>
+      {/* VIEW ROUTING */}
+      {activeSection === 'overview' && (
+        <>
+          {renderKpiCards()}
+          {renderCriticalAlerts()}
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+            <div className="xl:col-span-7">
+              <AdminHotspotMap
+                issues={issues}
+                onInspectComplaint={(issue) => openTriageModal(issue, 'general')}
+              />
             </div>
-            <span className="text-xs font-semibold text-slate-500">
-              {Object.keys(stats.departmentBreakdown).length} active divisions
-            </span>
+            <div className="xl:col-span-5">{renderDepartmentWorkload(false)}</div>
           </div>
+          {renderAuditLogs(6)}
+          {renderTriageQueue(8)}
+        </>
+      )}
 
-          <div className="mt-4 space-y-3">
-            {Object.entries(stats.departmentBreakdown)
-              .sort((a, b) => b[1] - a[1])
-              .map(([dept, count]) => {
-                const pct = stats.total > 0 ? Math.round((count / stats.total) * 100) : 0;
-                return (
-                  <div key={dept} className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-slate-800">{dept}</span>
-                      <span className="font-bold text-slate-700">
-                        {count} ticket{count === 1 ? '' : 's'} ({pct}%)
-                      </span>
-                    </div>
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                      <div
-                        className="h-full rounded-full bg-blue-600"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-          </div>
-        </section>
+      {activeSection === 'complaints' && (
+        <>
+          {renderKpiCards()}
+          {renderTriageQueue()}
+        </>
+      )}
 
-        <section
-          aria-label="Municipal SLA performance"
-          className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-slate-900 p-5 text-white shadow-sm lg:col-span-5"
-        >
-          <div>
-            <div className="flex items-center gap-2 text-blue-300">
-              <ShieldCheck className="h-5 w-5" aria-hidden="true" />
-              <h2 className="text-base font-bold text-white">Authority Command Metrics</h2>
-            </div>
-            <p className="mt-1 text-xs text-slate-300">
-              RBAC Protected: All actions are verified server-side and recorded in the immutable
-              municipal audit log.
-            </p>
-          </div>
+      {activeSection === 'departments' && (
+        <>
+          {renderKpiCards()}
+          {renderDepartmentWorkload(true)}
+        </>
+      )}
 
-          <div className="my-5 grid grid-cols-3 gap-3">
-            <div className="rounded-xl bg-slate-800 p-3">
-              <p className="text-[11px] text-slate-400">Critical Alerts</p>
-              <p className="mt-1 text-xl font-extrabold text-red-400">{stats.criticalCount}</p>
-            </div>
-            <div className="rounded-xl bg-slate-800 p-3">
-              <p className="text-[11px] text-slate-400">Open Backlog</p>
-              <p className="mt-1 text-xl font-extrabold text-amber-300">
-                {stats.reported + stats.inProgress}
-              </p>
-            </div>
-            <div className="rounded-xl bg-slate-800 p-3">
-              <p className="text-[11px] text-slate-400">Resolution Rate</p>
-              <p className="mt-1 text-xl font-extrabold text-emerald-400">{resolutionRate}%</p>
-            </div>
-          </div>
+      {activeSection === 'geography' && (
+        <>
+          {renderKpiCards()}
+          <AdminHotspotMap
+            issues={issues}
+            onInspectComplaint={(issue) => openTriageModal(issue, 'general')}
+          />
+        </>
+      )}
 
-          <p className="text-xs text-slate-400">
-            Click <strong>Manage</strong> on any ticket to reassign departments, override AI
-            priority (with logged reason), or upload field resolution evidence.
-          </p>
-        </section>
-      </div>
+      {activeSection === 'reports' && renderResolutionReports()}
 
-      {/* Priority Triage Queue */}
-      <section
-        aria-label="Priority triage queue"
-        className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
-          <div className="flex items-center gap-2">
-            <SlidersHorizontal className="h-5 w-5 text-blue-700" aria-hidden="true" />
-            <div>
-              <h2 className="text-base font-bold text-slate-900">
-                Priority Triage Queue (Sorted by AI Urgency)
-              </h2>
-              <p className="text-xs text-slate-500">
-                Highest-risk infrastructure hazards appear at the top for immediate dispatch.
-              </p>
-            </div>
-          </div>
+      {activeSection === 'audit' && renderAuditLogs()}
 
-          <div className="flex items-center gap-2">
-            {(
-              [
-                { id: 'active', label: 'Active Queue' },
-                { id: 'all', label: 'All Tickets' },
-                { id: 'resolved', label: 'Resolved' },
-              ] as const
-            ).map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setQueueFilter(tab.id)}
-                className={`focus-ring rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                  queueFilter === tab.id
-                    ? 'bg-slate-900 text-white'
-                    : 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[780px] border-collapse text-left text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <th className="py-3 pr-4">Ticket / Urgency</th>
-                <th className="py-3 pr-4">Issue &amp; Location</th>
-                <th className="py-3 pr-4">Assigned Department</th>
-                <th className="py-3 pr-4">Status</th>
-                <th className="py-3 text-right">Dispatch Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {sortedQueue.map((issue) => (
-                <tr key={issue.id} className="align-top hover:bg-slate-50/70">
-                  <td className="py-3.5 pr-4">
-                    <div className="font-bold text-slate-900">{issue.id}</div>
-                    <div className="mt-1">
-                      <PriorityBadge priority={issue.priority} />
-                    </div>
-                    <div className="mt-1 text-xs font-semibold text-slate-600">
-                      Score: {issue.urgencyScore}/100
-                    </div>
-                  </td>
-                  <td className="max-w-xs py-3.5 pr-4">
-                    <div className="font-semibold text-slate-900">{issue.title}</div>
-                    <div className="mt-0.5 text-xs text-slate-600">{issue.location}</div>
-                    <div className="mt-1 text-[11px] text-slate-500">
-                      Upvotes: {issue.upvotes} • {issue.category}
-                    </div>
-                    {issue.reporterContact && (
-                      <div className="mt-1 text-[11px] text-slate-500">
-                        Contact: {issue.reporterContact}
-                      </div>
-                    )}
-                    {issue.adminNotes && (
-                      <div className="mt-1.5 rounded bg-blue-50 px-2 py-1 text-[11px] text-blue-900">
-                        <strong>Note:</strong> {issue.adminNotes}
-                      </div>
-                    )}
-                  </td>
-                  <td className="py-3.5 pr-4 text-xs font-semibold text-slate-800">
-                    {issue.department}
-                    <div className="mt-1 font-normal text-slate-500">
-                      SLA: {issue.aiAnalysis.estimatedResolutionSla}
-                    </div>
-                  </td>
-                  <td className="py-3.5 pr-4">
-                    <StatusBadge status={issue.status} />
-                  </td>
-                  <td className="py-3.5 text-right">
-                    <div className="flex flex-wrap justify-end gap-1.5">
-                      {issue.status === 'Reported' && (
-                        <button
-                          type="button"
-                          onClick={() => handleQuickAdvance(issue, 'In Progress')}
-                          className="focus-ring rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-semibold text-indigo-800 hover:bg-indigo-100"
-                        >
-                          Dispatch Crew
-                        </button>
-                      )}
-                      {issue.status === 'In Progress' && (
-                        <button
-                          type="button"
-                          onClick={() => handleQuickAdvance(issue, 'Resolved')}
-                          className="focus-ring rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
-                        >
-                          Mark Resolved
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => openTriageModal(issue)}
-                        className="focus-ring inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-100"
-                      >
-                        <ClipboardEdit className="h-3.5 w-3.5" aria-hidden="true" />
-                        <span>Manage</span>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* Immutable Audit Log Panel */}
-      <section
-        aria-label="Administrative audit trail"
-        className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-      >
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-          <div className="flex items-center gap-2">
-            <FileClock className="h-5 w-5 text-blue-700" aria-hidden="true" />
-            <div>
-              <h2 className="text-base font-bold text-slate-900">
-                Immutable Administrative Audit Log
-              </h2>
-              <p className="text-xs text-slate-500">
-                Append-only record of status updates, department reassignments, and priority
-                overrides.
-              </p>
-            </div>
-          </div>
-          <span className="text-xs font-semibold text-slate-500">
-            {auditLogs.length} recorded event{auditLogs.length === 1 ? '' : 's'}
-          </span>
-        </div>
-
-        {auditLogs.length === 0 ? (
-          <p className="py-6 text-center text-xs text-slate-500">
-            No administrative mutations recorded in this session yet.
-          </p>
-        ) : (
-          <div className="mt-3 overflow-x-auto">
-            <table className="w-full min-w-[680px] border-collapse text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  <th className="py-2 pr-3">Timestamp</th>
-                  <th className="py-2 pr-3">Administrator</th>
-                  <th className="py-2 pr-3">Ticket</th>
-                  <th className="py-2 pr-3">Action</th>
-                  <th className="py-2">Reason / Notes</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {auditLogs.slice(0, 15).map((entry) => (
-                  <tr key={entry.id}>
-                    <td className="py-2 pr-3 text-slate-500">
-                      {new Date(entry.timestamp).toLocaleString()}
-                    </td>
-                    <td className="py-2 pr-3 font-medium text-slate-800">{entry.actorEmail}</td>
-                    <td className="py-2 pr-3 font-bold text-blue-800">{entry.targetTicketId}</td>
-                    <td className="py-2 pr-3 font-semibold text-slate-700">{entry.action}</td>
-                    <td className="py-2 text-slate-600">{entry.reason || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      {/* Triage Edit Modal */}
+      {/* FULL COMPLAINT DETAILS & TRIAGE MODAL */}
       {editingIssue && (
         <div
           role="dialog"
@@ -453,45 +1232,91 @@ export function AdminDashboard({
           aria-labelledby="triage-modal-title"
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
         >
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
-            <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+          <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-3">
               <div>
-                <h3 id="triage-modal-title" className="text-base font-bold text-slate-900">
-                  Manage Ticket {editingIssue.id}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-xs font-bold text-blue-700">
+                    {editingIssue.id}
+                  </span>
+                  <PriorityBadge priority={editingIssue.priority} />
+                  <StatusBadge status={editingIssue.status} />
+                </div>
+                <h3 id="triage-modal-title" className="mt-1 text-base font-bold text-slate-900">
+                  {editingIssue.title}
                 </h3>
-                <p className="text-xs text-slate-600">{editingIssue.title}</p>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {editingIssue.location} · {editingIssue.ward} · Reported{' '}
+                  {new Date(editingIssue.createdAt).toLocaleString()}
+                </p>
               </div>
               <button
                 type="button"
                 onClick={() => setEditingIssue(null)}
-                aria-label="Close triage dialog"
+                aria-label="Close complaint triage dialog"
                 className="focus-ring rounded-lg p-1 text-slate-500 hover:bg-slate-100"
               >
                 <X className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
 
+            {/* Complaint Context & Gemini AI Summary */}
+            <div className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-xs">
+              <p className="text-slate-800 leading-relaxed">{editingIssue.description}</p>
+              <div className="rounded-lg border border-violet-200 bg-violet-50/70 p-2.5 text-violet-950">
+                <div className="flex items-center justify-between">
+                  <span className="inline-flex items-center gap-1 font-bold text-violet-900">
+                    <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                    Gemini AI Triage ({editingIssue.urgencyScore}/100)
+                  </span>
+                  <span className="text-[11px] font-semibold">
+                    SLA: {editingIssue.aiAnalysis.estimatedResolutionSla}
+                  </span>
+                </div>
+                <p className="mt-1">{editingIssue.aiAnalysis.aiSummary}</p>
+                <p className="mt-1 text-[11px] text-violet-900/90">
+                  <strong>Recommended Action:</strong> {editingIssue.aiAnalysis.suggestedAction}
+                </p>
+              </div>
+              {editingIssue.imageUrl && (
+                <div>
+                  <span className="block text-[11px] font-semibold text-slate-600 mb-1">
+                    Submitted Field Photo
+                  </span>
+                  <img
+                    src={editingIssue.imageUrl}
+                    alt="Citizen submitted evidence"
+                    className="max-h-40 rounded-lg border border-slate-200 object-cover"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Administrative Action Form */}
             <form onSubmit={handleSaveTriage} className="mt-4 space-y-4">
               {modalError && (
                 <div
                   role="alert"
-                  className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-900"
+                  className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800"
                 >
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-700" aria-hidden="true" />
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                   <span>{modalError}</span>
                 </div>
               )}
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label htmlFor="admin-status" className="block text-xs font-semibold text-slate-800">
-                    Workflow Status
+                  <label
+                    htmlFor="modal-status"
+                    className="block text-xs font-semibold text-slate-700"
+                  >
+                    Complaint Status
                   </label>
                   <select
-                    id="admin-status"
+                    id="modal-status"
                     value={status}
                     onChange={(e) => setStatus(e.target.value as IssueStatus)}
-                    className="focus-ring mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                    className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
                   >
                     {ISSUE_STATUSES.map((s) => (
                       <option key={s} value={s}>
@@ -502,14 +1327,18 @@ export function AdminDashboard({
                 </div>
 
                 <div>
-                  <label htmlFor="admin-priority" className="block text-xs font-semibold text-slate-800">
-                    Priority Override
+                  <label
+                    htmlFor="modal-priority"
+                    className="block text-xs font-semibold text-slate-700"
+                  >
+                    Priority Tier {modalFocusHint === 'priority' ? '(Override Active)' : ''}
                   </label>
                   <select
-                    id="admin-priority"
+                    id="modal-priority"
+                    autoFocus={modalFocusHint === 'priority'}
                     value={priority}
                     onChange={(e) => setPriority(e.target.value as IssuePriority)}
-                    className="focus-ring mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                    className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
                   >
                     {ISSUE_PRIORITIES.map((p) => (
                       <option key={p} value={p}>
@@ -521,34 +1350,38 @@ export function AdminDashboard({
               </div>
 
               {priority !== editingIssue.priority && (
-                <div>
+                <div className="rounded-xl border border-amber-300 bg-amber-50 p-3">
                   <label
-                    htmlFor="admin-override-reason"
-                    className="block text-xs font-semibold text-amber-900"
+                    htmlFor="modal-override-reason"
+                    className="block text-xs font-bold text-amber-950"
                   >
-                    Priority Override Reason (Required for Audit Log)
+                    Mandatory Priority Override Reason *
                   </label>
                   <input
-                    id="admin-override-reason"
+                    id="modal-override-reason"
                     type="text"
                     required
                     value={priorityOverrideReason}
                     onChange={(e) => setPriorityOverrideReason(e.target.value)}
-                    placeholder="e.g., Field inspector verified secondary hazard nearby"
-                    className="focus-ring mt-1 w-full rounded-xl border border-amber-300 bg-amber-50/40 px-3 py-2 text-sm text-slate-900"
+                    placeholder="Explain why AI priority is being overridden (recorded in immutable audit log)"
+                    className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-amber-500 focus:outline-none"
                   />
                 </div>
               )}
 
               <div>
-                <label htmlFor="admin-dept" className="block text-xs font-semibold text-slate-800">
+                <label
+                  htmlFor="modal-department"
+                  className="block text-xs font-semibold text-slate-700"
+                >
                   Assigned Municipal Department
                 </label>
                 <select
-                  id="admin-dept"
+                  id="modal-department"
+                  autoFocus={modalFocusHint === 'department'}
                   value={department}
                   onChange={(e) => setDepartment(e.target.value as Department)}
-                  className="focus-ring mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
                 >
                   {DEPARTMENTS.map((d) => (
                     <option key={d} value={d}>
@@ -559,27 +1392,30 @@ export function AdminDashboard({
               </div>
 
               <div>
-                <label htmlFor="admin-notes" className="block text-xs font-semibold text-slate-800">
-                  Official Dispatch / Resolution Note
+                <label
+                  htmlFor="modal-notes"
+                  className="block text-xs font-semibold text-slate-700"
+                >
+                  Official Dispatch / Resolution Notes
                 </label>
                 <textarea
-                  id="admin-notes"
+                  id="modal-notes"
                   rows={3}
                   value={adminNotes}
                   onChange={(e) => setAdminNotes(e.target.value)}
-                  placeholder="Enter crew ID, action taken, or verification remarks..."
-                  className="focus-ring mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                  placeholder="Enter crew ID, dispatch details, or field resolution verification..."
+                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
                 />
               </div>
 
               <div>
-                <span className="block text-xs font-semibold text-slate-800">
-                  Resolution Evidence Photo (Optional, PNG/JPEG/WebP)
-                </span>
-                <div className="mt-1.5 flex items-center gap-3">
-                  <label className="focus-ring inline-flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:border-blue-400 hover:bg-blue-50">
-                    <Upload className="h-4 w-4 text-blue-600" aria-hidden="true" />
-                    <span>Upload Evidence Photo</span>
+                <label className="block text-xs font-semibold text-slate-700">
+                  Resolution Evidence Photo (Optional · PNG/JPEG/WebP)
+                </label>
+                <div className="mt-1 flex items-center gap-3">
+                  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">
+                    <Upload className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span>Upload Evidence</span>
                     <input
                       type="file"
                       accept="image/png,image/jpeg,image/webp"
@@ -588,26 +1424,37 @@ export function AdminDashboard({
                     />
                   </label>
                   {resolutionEvidenceUrl && (
-                    <span className="text-xs font-medium text-emerald-700">Evidence attached</span>
+                    <span className="text-xs font-medium text-emerald-700">
+                      Evidence image attached ✓
+                    </span>
                   )}
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-4">
                 <button
                   type="button"
                   onClick={() => setEditingIssue(null)}
-                  className="focus-ring rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  className="focus-ring rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="focus-ring inline-flex items-center gap-2 rounded-xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-60"
+                  className="focus-ring inline-flex items-center gap-1.5 rounded-xl bg-blue-700 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-800 disabled:opacity-50"
                 >
-                  {isSaving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-                  <span>Save &amp; Update Timeline</span>
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                      <span>Saving &amp; Recording Audit...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                      <span>Save Official Update</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

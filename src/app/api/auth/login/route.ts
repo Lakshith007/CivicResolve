@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { recordAuditLog } from '@/lib/auditStore';
 import { checkRateLimit, getClientIp, verifySameOrigin } from '@/lib/authGuards';
 import {
   authenticateCredentials,
@@ -61,6 +62,12 @@ export async function POST(request: Request) {
       }
 
       const token = createSessionToken(user);
+      recordAuditLog({
+        actor: user,
+        action: 'ADMIN_2FA_LOGIN',
+        targetTicketId: 'AUTH-SESSION',
+        updatedValues: { authMethod: '2FA_OTP_VERIFIED' },
+      });
       const isHttps =
         request.headers.get('x-forwarded-proto') === 'https' ||
         request.url.startsWith('https://');
