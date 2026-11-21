@@ -10,6 +10,7 @@ import {
   Copy,
   ExternalLink,
   Loader2,
+  Map as MapIcon,
   MapPin,
   Send,
   ShieldAlert,
@@ -28,6 +29,71 @@ import {
   type SessionUser,
 } from '@/types/civic';
 import { EngineBadge, PriorityBadge } from '@/components/CivicBadges';
+import { LocationPickerMap } from '@/components/LocationPickerMap';
+
+async function reverseGeocodeCoordinates(
+  lat: number,
+  lng: number
+): Promise<{ address: string; zone: string; resolved: boolean }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 4500);
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(
+        lat
+      )}&lon=${encodeURIComponent(lng)}&zoom=18&addressdetails=1`,
+      {
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      }
+    );
+
+    if (res.ok) {
+      const data = (await res.json()) as {
+        display_name?: string;
+        address?: Record<string, string | undefined>;
+      };
+      const addr = data.address || {};
+      const street =
+        [addr.house_number, addr.road || addr.pedestrian || addr.amenity || addr.building]
+          .filter(Boolean)
+          .join(' ') || '';
+      const locality =
+        addr.suburb ||
+        addr.neighbourhood ||
+        addr.city_district ||
+        addr.quarter ||
+        addr.village ||
+        addr.town ||
+        '';
+      const city = addr.city || addr.town || addr.state_district || '';
+
+      const formatted = [street, locality, city].filter(Boolean).join(', ');
+      const resolvedAddress =
+        formatted.length >= 3
+          ? formatted
+          : data.display_name
+          ? data.display_name.split(',').slice(0, 3).join(',').trim()
+          : `GPS Pin (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+
+      return {
+        address: resolvedAddress,
+        zone: locality || city || 'GPS Located Zone',
+        resolved: true,
+      };
+    }
+  } catch {
+    // Offline or reverse-geocoding timed out
+  } finally {
+    clearTimeout(timer);
+  }
+
+  return {
+    address: `GPS Pin (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+    zone: 'GPS Located Zone',
+    resolved: false,
+  };
+}
 
 interface DuplicateMatch {
   id: string;
@@ -138,6 +204,7 @@ export function ReportIssueForm({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
+  const [showMapPicker, setShowMapPicker] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submittedTicket, setSubmittedTicket] = useState<CivicIssue | null>(null);
   const [copiedId, setCopiedId] = useState(false);
@@ -168,11 +235,28 @@ export function ReportIssueForm({
     setGpsStatus('idle');
     setGpsAccuracy(null);
     setGpsMessage(null);
+    setShowMapPicker(false);
     setUserCategory('auto');
     setAnalysis(null);
     setDuplicates([]);
     setErrorMessage(null);
     setSubmittedTicket(null);
+  };
+
+  const handleMapPick = async (coords: { lat: number; lng: number }) => {
+    setCoordinates(coords);
+    setGpsAccuracy(null);
+    setGpsStatus('locating');
+    setGpsMessage('Resolving street address for selected map pin...');
+    setErrorMessage(null);
+
+    const geo = await reverseGeocodeCoordinates(coords.lat, coords.lng);
+    setLocation(geo.address);
+    setWard(geo.zone);
+    setGpsStatus('locked');
+    setGpsMessage(
+      geo.resolved ? 'Map pin selected & street address resolved' : 'Map pin coordinates locked'
+    );
   };
 
   const handleDetectGps = () => {
@@ -197,67 +281,18 @@ export function ReportIssueForm({
         setCoordinates({ lat, lng });
         setGpsAccuracy(accuracy);
 
-        // Reverse-geocode live GPS coordinates to a real street & locality address
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 4500);
-        try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(
-              lat
-            )}&lon=${encodeURIComponent(lng)}&zoom=18&addressdetails=1`,
-            {
-              headers: { Accept: 'application/json' },
-              signal: controller.signal,
-            }
-          );
-
-          if (res.ok) {
-            const data = (await res.json()) as {
-              display_name?: string;
-              address?: Record<string, string | undefined>;
-            };
-            const addr = data.address || {};
-            const street =
-              [addr.house_number, addr.road || addr.pedestrian || addr.amenity || addr.building]
-                .filter(Boolean)
-                .join(' ') || '';
-            const locality =
-              addr.suburb ||
-              addr.neighbourhood ||
-              addr.city_district ||
-              addr.quarter ||
-              addr.village ||
-              addr.town ||
-              '';
-            const city = addr.city || addr.town || addr.state_district || '';
-
-            const formatted = [street, locality, city].filter(Boolean).join(', ');
-            if (formatted.length >= 3) {
-              setLocation(formatted);
-            } else if (data.display_name) {
-              setLocation(data.display_name.split(',').slice(0, 3).join(',').trim());
-            } else {
-              setLocation(`GPS Pin (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
-            }
-
-            setWard(locality || city || 'GPS Located Zone');
-            setGpsStatus('locked');
-            setGpsMessage('Live street address & coordinates resolved via GPS');
-            return;
-          }
-        } catch {
-          // Reverse-geocoding unavailable or timed out; keep exact GPS coordinates cleanly
-        } finally {
-          clearTimeout(timer);
-          setIsLocating(false);
+        const geo = await reverseGeocodeCoordinates(lat, lng);
+        if (geo.resolved || !location.trim()) {
+          setLocation(geo.address);
         }
-
-        if (!location.trim()) {
-          setLocation(`GPS Pin (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
-        }
-        setWard('GPS Located Zone');
+        setWard(geo.zone);
         setGpsStatus('locked');
-        setGpsMessage('GPS coordinates locked');
+        setGpsMessage(
+          geo.resolved
+            ? 'Live street address & coordinates resolved via GPS'
+            : 'GPS coordinates locked'
+        );
+        setIsLocating(false);
       },
       (err) => {
         setIsLocating(false);
@@ -265,12 +300,12 @@ export function ReportIssueForm({
         setGpsAccuracy(null);
         if (err.code === 1) {
           setGpsMessage(
-            'Location permission denied. Enable browser location access or type your street/landmark manually.'
+            'Location permission denied. Enable browser location access or pick a spot on the map below.'
           );
         } else if (err.code === 3) {
-          setGpsMessage('GPS signal timed out. Move near an open area or type your location manually.');
+          setGpsMessage('GPS signal timed out. Use Pick on Map or type your location manually.');
         } else {
-          setGpsMessage('Unable to detect GPS coordinates right now. Please type your location manually.');
+          setGpsMessage('Unable to detect GPS coordinates right now. Use Pick on Map or type your location manually.');
         }
       },
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 15000 }
@@ -373,6 +408,7 @@ export function ReportIssueForm({
         setGpsStatus('idle');
         setGpsAccuracy(null);
         setGpsMessage(null);
+        setShowMapPicker(false);
         setImageUrl(undefined);
         setDuplicates([]);
       }
@@ -522,19 +558,34 @@ export function ReportIssueForm({
               <label htmlFor="issue-location" className="block text-sm font-semibold text-slate-800">
                 Street / Landmark Location <span className="text-red-600">*</span>
               </label>
-              <button
-                type="button"
-                onClick={handleDetectGps}
-                disabled={isLocating}
-                className="focus-ring inline-flex items-center gap-1.5 rounded-xl bg-blue-700 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-800 disabled:opacity-60"
-              >
-                {isLocating ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                ) : (
-                  <Compass className="h-3.5 w-3.5" aria-hidden="true" />
-                )}
-                <span>{isLocating ? 'Locating Address...' : 'Detect My GPS'}</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowMapPicker((prev) => !prev)}
+                  aria-expanded={showMapPicker}
+                  className={`focus-ring inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold shadow-sm transition ${
+                    showMapPicker
+                      ? 'border-blue-600 bg-blue-50 text-blue-800'
+                      : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-100'
+                  }`}
+                >
+                  <MapIcon className="h-3.5 w-3.5 text-blue-700" aria-hidden="true" />
+                  <span>{showMapPicker ? 'Hide Map Picker' : 'Pick on Map'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDetectGps}
+                  disabled={isLocating}
+                  className="focus-ring inline-flex items-center gap-1.5 rounded-xl bg-blue-700 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-800 disabled:opacity-60"
+                >
+                  {isLocating ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Compass className="h-3.5 w-3.5" aria-hidden="true" />
+                  )}
+                  <span>{isLocating ? 'Locating Address...' : 'Detect My GPS'}</span>
+                </button>
+              </div>
             </div>
 
             <div className="relative">
@@ -548,10 +599,16 @@ export function ReportIssueForm({
                 required
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
-                placeholder="Click 'Detect My GPS' to auto-fill street address, or type landmark manually..."
+                placeholder="Click 'Pick on Map', 'Detect My GPS', or type street / landmark manually..."
                 className="focus-ring w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400"
               />
             </div>
+
+            {showMapPicker && (
+              <div className="pt-1">
+                <LocationPickerMap coordinates={coordinates} onSelectLocation={handleMapPick} />
+              </div>
+            )}
 
             {/* Live GPS Verification Strip */}
             {gpsStatus === 'locating' && (
