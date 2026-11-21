@@ -15,6 +15,7 @@ import {
   ISSUE_STATUSES,
   type CivicIssue,
   type DashboardStats,
+  type SessionUser,
 } from '@/types/civic';
 import {
   EngineBadge,
@@ -27,6 +28,7 @@ interface TrackingDashboardProps {
   issues: CivicIssue[];
   stats: DashboardStats;
   highlightedId: string | null;
+  currentUser?: SessionUser | null;
   onUpvote: (id: string) => Promise<void>;
 }
 
@@ -50,12 +52,14 @@ export function TrackingDashboard({
   issues,
   stats,
   highlightedId,
+  currentUser,
   onUpvote,
 }: TrackingDashboardProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
   const [priorityFilter, setPriorityFilter] = useState<string>('All');
+  const [onlyMine, setOnlyMine] = useState(false);
   const [selectedMapIssueId, setSelectedMapIssueId] = useState<string | null>(highlightedId);
   const [expandedId, setExpandedId] = useState<string | null>(highlightedId);
   const [upvotingId, setUpvotingId] = useState<string | null>(null);
@@ -63,6 +67,7 @@ export function TrackingDashboard({
   const filteredIssues = useMemo(() => {
     const q = search.trim().toLowerCase();
     return issues.filter((issue) => {
+      if (onlyMine && currentUser && issue.reporterUserId !== currentUser.id) return false;
       if (statusFilter !== 'All' && issue.status !== statusFilter) return false;
       if (categoryFilter !== 'All' && issue.category !== categoryFilter) return false;
       if (priorityFilter !== 'All' && issue.priority !== priorityFilter) return false;
@@ -73,7 +78,7 @@ export function TrackingDashboard({
       }
       return true;
     });
-  }, [issues, search, statusFilter, categoryFilter, priorityFilter]);
+  }, [issues, search, statusFilter, categoryFilter, priorityFilter, onlyMine, currentUser]);
 
   const selectedMapIssue =
     filteredIssues.find((i) => i.id === selectedMapIssueId) ?? filteredIssues[0] ?? null;
@@ -274,6 +279,19 @@ export function TrackingDashboard({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {currentUser && (
+            <button
+              type="button"
+              onClick={() => setOnlyMine((prev) => !prev)}
+              className={`focus-ring rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                onlyMine
+                  ? 'bg-emerald-700 text-white shadow-sm'
+                  : 'border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+              }`}
+            >
+              My Reports
+            </button>
+          )}
           {(['All', ...ISSUE_STATUSES] as const).map((status) => (
             <button
               key={status}
@@ -430,6 +448,18 @@ export function TrackingDashboard({
                           alt={`Evidence for ${issue.id}`}
                           className="mt-2 h-28 w-full rounded-lg border border-slate-200 object-cover"
                         />
+                      )}
+                      {issue.resolutionEvidenceUrl && (
+                        <div className="mt-2 space-y-1">
+                          <span className="block font-semibold text-emerald-800">
+                            Verified Resolution Photo:
+                          </span>
+                          <img
+                            src={issue.resolutionEvidenceUrl}
+                            alt={`Resolution proof for ${issue.id}`}
+                            className="h-28 w-full rounded-lg border border-emerald-200 object-cover"
+                          />
+                        </div>
                       )}
                     </div>
                   </div>

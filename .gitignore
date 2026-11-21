@@ -27,6 +27,9 @@ yarn-error.log*
 .env*.local
 !.env.example
 
+# runtime json persistence (users, issues, audit logs, revoked sessions)
+/data/
+
 # vercel
 .vercel
 

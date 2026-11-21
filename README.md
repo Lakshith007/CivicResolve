@@ -34,6 +34,16 @@ Built for **PromptWars 2026**, **CivicResolve** transforms how citizens report l
 
 ---
 
+## Security & Role-Based Access Control (RBAC)
+
+CivicResolve enforces server-side RBAC across both Next.js Server Components (`/admin`, `/admin/dashboard`) and REST API routes:
+
+- **CITIZEN (Default Role):** All public registrations receive `CITIZEN` automatically (`POST /api/auth/register`). Citizens can report issues, upload validated PNG/JPEG/WebP photos, track public issues, filter `My Reports`, and upvote active tickets.
+- **ADMIN (Protected Role):** Bootstrapped via server-only environment variables (`ADMIN_BOOTSTRAP_EMAIL`, `ADMIN_BOOTSTRAP_PASSWORD`, `ADMIN_BOOTSTRAP_NAME`). Verified administrators can access `/admin`, view all complaints & private contact details, reassign departments, override AI priorities (with mandatory logged reason), upload resolution evidence, and inspect the immutable audit trail.
+- **Hardened Controls:** HMAC-SHA256 signed `HttpOnly` session cookies (`civic_session`), scrypt password hashing with per-user salt, server-side AI classification (prevents priority spoofing), PII stripping on public APIs, magic-byte upload validation (SVG blocked), CSRF origin checks, rate limiting, and append-only audit logging (`data/audit-logs.json`).
+
+---
+
 ## Getting Started
 
 ### 1. Install Dependencies

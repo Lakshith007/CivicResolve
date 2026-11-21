@@ -1,31 +1,93 @@
 import { NextResponse } from 'next/server';
-import { getDashboardStats, getIssueById, updateIssueStatus, upvoteIssue } from '@/lib/issueStore';
-import { validateStatusUpdate } from '@/lib/validation';
+import { recordAuditLog } from '@/lib/auditStore';
+import {
+  authenticateUser,
+  requireAdmin,
+  requireAuth,
+  verifySameOrigin,
+} from '@/lib/authGuards';
+import {
+  canAccessPrivateIssue,
+  getDashboardStats,
+  getIssueById,
+  toPublicIssue,
+  updateIssueStatus,
+  upvoteIssue,
+} from '@/lib/issueStore';
+import { validateStatusUpdate, validateTicketId } from '@/lib/validation';
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: { id: string } }
 ) {
+  if (!validateTicketId(context.params.id)) {
+    return NextResponse.json({ error: 'Invalid civic ticket ID format.' }, { status: 400 });
+  }
+
   const issue = getIssueById(context.params.id);
   if (!issue) {
     return NextResponse.json({ error: 'Civic issue ticket not found.' }, { status: 404 });
   }
-  return NextResponse.json({ issue });
+
+  const { searchParams } = new URL(request.url);
+  if (searchParams.get('private') === 'true') {
+    const authGuard = requireAuth(request);
+    if (!authGuard.ok) return authGuard.response;
+    if (!canAccessPrivateIssue(issue, authGuard.user)) {
+      return NextResponse.json(
+        { error: 'Forbidden: you cannot access private details of another citizen complaint.' },
+        { status: 403 }
+      );
+    }
+    return NextResponse.json({ issue });
+  }
+
+  const viewer = authenticateUser(request);
+  return NextResponse.json({ issue: toPublicIssue(issue, viewer) });
 }
 
 export async function PATCH(
   request: Request,
   context: { params: { id: string } }
 ) {
+  const originError = verifySameOrigin(request);
+  if (originError) return originError;
+
+  if (!validateTicketId(context.params.id)) {
+    return NextResponse.json({ error: 'Invalid civic ticket ID format.' }, { status: 400 });
+  }
+
   try {
     const body = (await request.json()) as Record<string, unknown>;
 
-    if (body.action === 'upvote') {
+    const hasAdminFields =
+      body &&
+      typeof body === 'object' &&
+      ('status' in body ||
+        'department' in body ||
+        'priority' in body ||
+        'adminNotes' in body ||
+        'resolutionEvidenceUrl' in body);
+
+    if (body?.action === 'upvote' && !hasAdminFields) {
       const updated = upvoteIssue(context.params.id);
       if (!updated) {
         return NextResponse.json({ error: 'Civic issue ticket not found.' }, { status: 404 });
       }
-      return NextResponse.json({ issue: updated, stats: getDashboardStats() });
+      const viewer = authenticateUser(request);
+      return NextResponse.json({
+        issue: toPublicIssue(updated, viewer),
+        stats: getDashboardStats(),
+      });
+    }
+
+    // All administrative triage, assignment, priority override, and status mutations require ADMIN role
+    const adminGuard = requireAdmin(request);
+    if (!adminGuard.ok) return adminGuard.response;
+
+    const existing = getIssueById(context.params.id);
+    if (!existing) {
+      return NextResponse.json({ error: 'Civic issue ticket not found.' }, { status: 404 });
     }
 
     const validation = validateStatusUpdate(body);
@@ -36,10 +98,48 @@ export async function PATCH(
       );
     }
 
-    const updated = updateIssueStatus(context.params.id, validation.data);
+    const isPriorityChanged =
+      validation.data.priority !== undefined &&
+      validation.data.priority !== existing.priority;
+
+    if (isPriorityChanged && !validation.data.priorityOverrideReason) {
+      return NextResponse.json(
+        {
+          error:
+            'A documented reason (priorityOverrideReason) is required when overriding AI-recommended priority.',
+        },
+        { status: 400 }
+      );
+    }
+
+    const updated = updateIssueStatus(context.params.id, {
+      ...validation.data,
+      updatedBy: `${adminGuard.user.name} (${adminGuard.user.email})`,
+    });
+
     if (!updated) {
       return NextResponse.json({ error: 'Civic issue ticket not found.' }, { status: 404 });
     }
+
+    recordAuditLog({
+      actor: adminGuard.user,
+      action: isPriorityChanged
+        ? 'ADMIN_TRIAGE_AND_PRIORITY_OVERRIDE'
+        : 'ADMIN_TRIAGE_UPDATE',
+      targetTicketId: existing.id,
+      previousValues: {
+        status: existing.status,
+        department: existing.department,
+        priority: existing.priority,
+      },
+      updatedValues: {
+        status: updated.status,
+        department: updated.department,
+        priority: updated.priority,
+        hasResolutionEvidence: Boolean(updated.resolutionEvidenceUrl),
+      },
+      reason: validation.data.priorityOverrideReason || validation.data.adminNotes,
+    });
 
     return NextResponse.json({ issue: updated, stats: getDashboardStats() });
   } catch {

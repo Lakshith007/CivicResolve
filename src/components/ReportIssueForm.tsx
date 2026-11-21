@@ -79,16 +79,34 @@ const DEMO_PRESETS = [
   },
 ];
 
-function createSampleSvgDataUri(label: string, accent: string): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
-    <rect width="640" height="360" fill="#1e293b"/>
-    <rect x="24" y="24" width="592" height="312" rx="14" fill="#0f172a" stroke="${accent}" stroke-width="3"/>
-    <circle cx="320" cy="155" r="46" fill="${accent}" fill-opacity="0.22" stroke="${accent}" stroke-width="3"/>
-    <text x="320" y="163" text-anchor="middle" fill="#f8fafc" font-family="sans-serif" font-size="22" font-weight="bold">FIELD PHOTO</text>
-    <text x="320" y="236" text-anchor="middle" fill="#cbd5e1" font-family="sans-serif" font-size="18">${label}</text>
-    <text x="320" y="268" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="13">CivicResolve Citizen Attachment Preview</text>
-  </svg>`;
-  return `data:image/svg+xml;base64,${typeof window !== 'undefined' ? window.btoa(svg) : ''}`;
+function createSamplePngDataUri(label: string, accent: string): string {
+  if (typeof document === 'undefined') return '';
+  const canvas = document.createElement('canvas');
+  canvas.width = 640;
+  canvas.height = 360;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return '';
+
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(0, 0, 640, 360);
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(24, 24, 592, 312);
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 4;
+  ctx.strokeRect(24, 24, 592, 312);
+
+  ctx.fillStyle = '#f8fafc';
+  ctx.font = 'bold 24px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('FIELD PHOTO', 320, 160);
+  ctx.fillStyle = '#cbd5e1';
+  ctx.font = '18px sans-serif';
+  ctx.fillText(label, 320, 210);
+  ctx.fillStyle = '#64748b';
+  ctx.font = '13px sans-serif';
+  ctx.fillText('CivicResolve Verified PNG Preview', 320, 250);
+
+  return canvas.toDataURL('image/png');
 }
 
 export function ReportIssueForm({
@@ -162,8 +180,12 @@ export function ReportIssueForm({
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (file.size > 1_800_000) {
-      setErrorMessage('Please upload an image smaller than 1.8 MB.');
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      setErrorMessage('Only PNG, JPEG, or WebP images are permitted.');
+      return;
+    }
+    if (file.size > 1_400_000) {
+      setErrorMessage('Please upload an image smaller than 1.4 MB.');
       return;
     }
     const reader = new FileReader();
@@ -235,7 +257,6 @@ export function ReportIssueForm({
           imageUrl,
           reporterName: reporterName.trim() || 'Concerned Citizen',
           reporterContact: reporterContact.trim() || undefined,
-          aiAnalysis: analysis ?? undefined,
         }),
       });
       const data = await res.json();
@@ -498,7 +519,7 @@ export function ReportIssueForm({
                 <span>Upload Photo</span>
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/png,image/jpeg,image/webp"
                   onChange={handleFileUpload}
                   className="sr-only"
                 />
@@ -506,9 +527,10 @@ export function ReportIssueForm({
 
               <button
                 type="button"
-                onClick={() =>
-                  setImageUrl(createSampleSvgDataUri('Road Damage Evidence #01', '#f59e0b'))
-                }
+                onClick={() => {
+                  const png = createSamplePngDataUri('Road Damage Evidence #01', '#f59e0b');
+                  if (png) setImageUrl(png);
+                }}
                 className="focus-ring inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
               >
                 <Camera className="h-3.5 w-3.5 text-slate-500" aria-hidden="true" />

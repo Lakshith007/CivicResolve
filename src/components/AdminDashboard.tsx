@@ -2,18 +2,22 @@
 
 import React, { useMemo, useState } from 'react';
 import {
+  AlertCircle,
   Building2,
   CheckCircle2,
   ClipboardEdit,
+  FileClock,
   Loader2,
   ShieldCheck,
   SlidersHorizontal,
+  Upload,
   X,
 } from 'lucide-react';
 import {
   DEPARTMENTS,
   ISSUE_PRIORITIES,
   ISSUE_STATUSES,
+  type AuditLogEntry,
   type CivicIssue,
   type DashboardStats,
   type Department,
@@ -25,24 +29,35 @@ import { PriorityBadge, StatusBadge } from '@/components/CivicBadges';
 interface AdminDashboardProps {
   issues: CivicIssue[];
   stats: DashboardStats;
+  auditLogs?: AuditLogEntry[];
   onUpdateIssue: (
     id: string,
     payload: {
       status: IssueStatus;
       department: Department;
       priority: IssuePriority;
+      priorityOverrideReason?: string;
       adminNotes: string;
+      resolutionEvidenceUrl?: string;
     }
-  ) => Promise<void>;
+  ) => Promise<{ ok: boolean; error?: string }>;
 }
 
-export function AdminDashboard({ issues, stats, onUpdateIssue }: AdminDashboardProps) {
+export function AdminDashboard({
+  issues,
+  stats,
+  auditLogs = [],
+  onUpdateIssue,
+}: AdminDashboardProps) {
   const [queueFilter, setQueueFilter] = useState<'active' | 'all' | 'resolved'>('active');
   const [editingIssue, setEditingIssue] = useState<CivicIssue | null>(null);
   const [status, setStatus] = useState<IssueStatus>('In Progress');
   const [department, setDepartment] = useState<Department>(DEPARTMENTS[0]);
   const [priority, setPriority] = useState<IssuePriority>('High');
+  const [priorityOverrideReason, setPriorityOverrideReason] = useState('');
   const [adminNotes, setAdminNotes] = useState('');
+  const [resolutionEvidenceUrl, setResolutionEvidenceUrl] = useState<string | undefined>(undefined);
+  const [modalError, setModalError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -61,23 +76,63 @@ export function AdminDashboard({ issues, stats, onUpdateIssue }: AdminDashboardP
     setStatus(issue.status);
     setDepartment(issue.department);
     setPriority(issue.priority);
+    setPriorityOverrideReason('');
     setAdminNotes(issue.adminNotes ?? '');
+    setResolutionEvidenceUrl(issue.resolutionEvidenceUrl);
+    setModalError(null);
+  };
+
+  const handleEvidenceUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      setModalError('Resolution evidence must be a PNG, JPEG, or WebP image.');
+      return;
+    }
+    if (file.size > 1_400_000) {
+      setModalError('Resolution evidence image must be under 1.4 MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setResolutionEvidenceUrl(reader.result);
+        setModalError(null);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSaveTriage = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!editingIssue) return;
+    setModalError(null);
+
+    if (priority !== editingIssue.priority && priorityOverrideReason.trim().length < 5) {
+      setModalError(
+        'Please enter a clear justification (5+ chars) when overriding the AI priority.'
+      );
+      return;
+    }
+
     setIsSaving(true);
     try {
-      await onUpdateIssue(editingIssue.id, {
+      const result = await onUpdateIssue(editingIssue.id, {
         status,
         department,
         priority,
+        priorityOverrideReason:
+          priority !== editingIssue.priority ? priorityOverrideReason.trim() : undefined,
         adminNotes,
+        resolutionEvidenceUrl,
       });
-      setToastMessage(
-        `Updated ${editingIssue.id} → ${status} (${department})`
-      );
+
+      if (!result.ok) {
+        setModalError(result.error || 'Failed to update complaint.');
+        return;
+      }
+
+      setToastMessage(`Updated ${editingIssue.id} → ${status} (${department})`);
       setEditingIssue(null);
     } finally {
       setIsSaving(false);
@@ -85,7 +140,7 @@ export function AdminDashboard({ issues, stats, onUpdateIssue }: AdminDashboardP
   };
 
   const handleQuickAdvance = async (issue: CivicIssue, nextStatus: IssueStatus) => {
-    await onUpdateIssue(issue.id, {
+    const result = await onUpdateIssue(issue.id, {
       status: nextStatus,
       department: issue.department,
       priority: issue.priority,
@@ -94,7 +149,9 @@ export function AdminDashboard({ issues, stats, onUpdateIssue }: AdminDashboardP
           ? `Dispatched ${issue.department} crew.`
           : `Verified completed and closed by municipal supervisor.`,
     });
-    setToastMessage(`Quick action: ${issue.id} marked ${nextStatus}.`);
+    if (result.ok) {
+      setToastMessage(`Quick action: ${issue.id} marked ${nextStatus}.`);
+    }
   };
 
   const resolutionRate =
@@ -174,8 +231,8 @@ export function AdminDashboard({ issues, stats, onUpdateIssue }: AdminDashboardP
               <h2 className="text-base font-bold text-white">Authority Command Metrics</h2>
             </div>
             <p className="mt-1 text-xs text-slate-300">
-              Tickets are automatically prioritized by Gemini AI urgency score (0–100) and
-              community upvotes.
+              RBAC Protected: All actions are verified server-side and recorded in the immutable
+              municipal audit log.
             </p>
           </div>
 
@@ -197,8 +254,8 @@ export function AdminDashboard({ issues, stats, onUpdateIssue }: AdminDashboardP
           </div>
 
           <p className="text-xs text-slate-400">
-            Click <strong>Manage / Dispatch</strong> on any queue item to reassign departments,
-            override priority, or post official field resolution notes.
+            Click <strong>Manage</strong> on any ticket to reassign departments, override AI
+            priority (with logged reason), or upload field resolution evidence.
           </p>
         </section>
       </div>
@@ -274,6 +331,11 @@ export function AdminDashboard({ issues, stats, onUpdateIssue }: AdminDashboardP
                     <div className="mt-1 text-[11px] text-slate-500">
                       Upvotes: {issue.upvotes} • {issue.category}
                     </div>
+                    {issue.reporterContact && (
+                      <div className="mt-1 text-[11px] text-slate-500">
+                        Contact: {issue.reporterContact}
+                      </div>
+                    )}
                     {issue.adminNotes && (
                       <div className="mt-1.5 rounded bg-blue-50 px-2 py-1 text-[11px] text-blue-900">
                         <strong>Note:</strong> {issue.adminNotes}
@@ -326,6 +388,63 @@ export function AdminDashboard({ issues, stats, onUpdateIssue }: AdminDashboardP
         </div>
       </section>
 
+      {/* Immutable Audit Log Panel */}
+      <section
+        aria-label="Administrative audit trail"
+        className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+      >
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2">
+            <FileClock className="h-5 w-5 text-blue-700" aria-hidden="true" />
+            <div>
+              <h2 className="text-base font-bold text-slate-900">
+                Immutable Administrative Audit Log
+              </h2>
+              <p className="text-xs text-slate-500">
+                Append-only record of status updates, department reassignments, and priority
+                overrides.
+              </p>
+            </div>
+          </div>
+          <span className="text-xs font-semibold text-slate-500">
+            {auditLogs.length} recorded event{auditLogs.length === 1 ? '' : 's'}
+          </span>
+        </div>
+
+        {auditLogs.length === 0 ? (
+          <p className="py-6 text-center text-xs text-slate-500">
+            No administrative mutations recorded in this session yet.
+          </p>
+        ) : (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[680px] border-collapse text-left text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  <th className="py-2 pr-3">Timestamp</th>
+                  <th className="py-2 pr-3">Administrator</th>
+                  <th className="py-2 pr-3">Ticket</th>
+                  <th className="py-2 pr-3">Action</th>
+                  <th className="py-2">Reason / Notes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {auditLogs.slice(0, 15).map((entry) => (
+                  <tr key={entry.id}>
+                    <td className="py-2 pr-3 text-slate-500">
+                      {new Date(entry.timestamp).toLocaleString()}
+                    </td>
+                    <td className="py-2 pr-3 font-medium text-slate-800">{entry.actorEmail}</td>
+                    <td className="py-2 pr-3 font-bold text-blue-800">{entry.targetTicketId}</td>
+                    <td className="py-2 pr-3 font-semibold text-slate-700">{entry.action}</td>
+                    <td className="py-2 text-slate-600">{entry.reason || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
       {/* Triage Edit Modal */}
       {editingIssue && (
         <div
@@ -334,7 +453,7 @@ export function AdminDashboard({ issues, stats, onUpdateIssue }: AdminDashboardP
           aria-labelledby="triage-modal-title"
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
         >
-          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
             <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
               <div>
                 <h3 id="triage-modal-title" className="text-base font-bold text-slate-900">
@@ -353,6 +472,16 @@ export function AdminDashboard({ issues, stats, onUpdateIssue }: AdminDashboardP
             </div>
 
             <form onSubmit={handleSaveTriage} className="mt-4 space-y-4">
+              {modalError && (
+                <div
+                  role="alert"
+                  className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-900"
+                >
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-700" aria-hidden="true" />
+                  <span>{modalError}</span>
+                </div>
+              )}
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label htmlFor="admin-status" className="block text-xs font-semibold text-slate-800">
@@ -391,6 +520,26 @@ export function AdminDashboard({ issues, stats, onUpdateIssue }: AdminDashboardP
                 </div>
               </div>
 
+              {priority !== editingIssue.priority && (
+                <div>
+                  <label
+                    htmlFor="admin-override-reason"
+                    className="block text-xs font-semibold text-amber-900"
+                  >
+                    Priority Override Reason (Required for Audit Log)
+                  </label>
+                  <input
+                    id="admin-override-reason"
+                    type="text"
+                    required
+                    value={priorityOverrideReason}
+                    onChange={(e) => setPriorityOverrideReason(e.target.value)}
+                    placeholder="e.g., Field inspector verified secondary hazard nearby"
+                    className="focus-ring mt-1 w-full rounded-xl border border-amber-300 bg-amber-50/40 px-3 py-2 text-sm text-slate-900"
+                  />
+                </div>
+              )}
+
               <div>
                 <label htmlFor="admin-dept" className="block text-xs font-semibold text-slate-800">
                   Assigned Municipal Department
@@ -421,6 +570,27 @@ export function AdminDashboard({ issues, stats, onUpdateIssue }: AdminDashboardP
                   placeholder="Enter crew ID, action taken, or verification remarks..."
                   className="focus-ring mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
                 />
+              </div>
+
+              <div>
+                <span className="block text-xs font-semibold text-slate-800">
+                  Resolution Evidence Photo (Optional, PNG/JPEG/WebP)
+                </span>
+                <div className="mt-1.5 flex items-center gap-3">
+                  <label className="focus-ring inline-flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:border-blue-400 hover:bg-blue-50">
+                    <Upload className="h-4 w-4 text-blue-600" aria-hidden="true" />
+                    <span>Upload Evidence Photo</span>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={handleEvidenceUpload}
+                      className="sr-only"
+                    />
+                  </label>
+                  {resolutionEvidenceUrl && (
+                    <span className="text-xs font-medium text-emerald-700">Evidence attached</span>
+                  )}
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">

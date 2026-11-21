@@ -62,6 +62,33 @@ export interface StatusHistoryEntry {
   updatedBy: string;
 }
 
+export type UserRole = 'CITIZEN' | 'ADMIN';
+
+export interface SessionUser {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+}
+
+export interface UserRecord extends SessionUser {
+  passwordHash: string;
+  createdAt: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  actorId: string;
+  actorEmail: string;
+  actorRole: UserRole;
+  action: string;
+  targetTicketId: string;
+  previousValues?: Record<string, unknown>;
+  updatedValues?: Record<string, unknown>;
+  reason?: string;
+  timestamp: string;
+}
+
 export interface CivicIssue {
   id: string;
   title: string;
@@ -78,6 +105,8 @@ export interface CivicIssue {
   department: Department;
   status: IssueStatus;
   imageUrl?: string;
+  resolutionEvidenceUrl?: string;
+  reporterUserId?: string;
   reporterName: string;
   reporterContact?: string;
   upvotes: number;

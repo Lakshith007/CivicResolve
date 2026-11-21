@@ -1,11 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 import type {
+  AIAnalysisResult,
   CivicIssue,
   DashboardStats,
   Department,
   IssuePriority,
   IssueStatus,
+  SessionUser,
 } from '@/types/civic';
 import type { SanitizedIssueSubmission, SanitizedStatusUpdate } from '@/lib/validation';
 import { classifyWithHeuristic } from '@/lib/aiClassifier';
@@ -354,11 +356,35 @@ function generateNextTicketId(issues: CivicIssue[]): string {
   return `CR-2026-${maxNum + 1}`;
 }
 
-export function createIssue(submission: SanitizedIssueSubmission): CivicIssue {
+export function canAccessPrivateIssue(
+  issue: CivicIssue,
+  viewer: SessionUser | null
+): boolean {
+  if (!viewer) return false;
+  if (viewer.role === 'ADMIN') return true;
+  return Boolean(issue.reporterUserId && issue.reporterUserId === viewer.id);
+}
+
+/**
+ * Strips private reporter contact details and internal user identifiers unless
+ * the viewer is an Administrator or the ticket's authenticated creator.
+ */
+export function toPublicIssue(issue: CivicIssue, viewer: SessionUser | null): CivicIssue {
+  if (canAccessPrivateIssue(issue, viewer)) {
+    return issue;
+  }
+  const { reporterContact: _contact, reporterUserId: _uid, ...publicFields } = issue;
+  return publicFields;
+}
+
+export function createIssue(
+  submission: SanitizedIssueSubmission,
+  options?: { aiAnalysis?: AIAnalysisResult; reporterUserId?: string }
+): CivicIssue {
   const issues = loadIssues();
   const now = new Date().toISOString();
   const analysis =
-    submission.aiAnalysis ??
+    options?.aiAnalysis ??
     classifyWithHeuristic({
       title: submission.title,
       description: submission.description,
@@ -379,6 +405,7 @@ export function createIssue(submission: SanitizedIssueSubmission): CivicIssue {
     department: analysis.department,
     status: 'Reported',
     imageUrl: submission.imageUrl,
+    reporterUserId: options?.reporterUserId,
     reporterName: submission.reporterName,
     reporterContact: submission.reporterContact,
     upvotes: 1,
@@ -422,7 +449,12 @@ export function updateIssueStatus(
         ? `Issue verified and marked resolved by ${nextDepartment}.`
         : 'Ticket reopened for municipal review.';
 
-  const note = update.adminNotes || defaultNote;
+  const overrideTag =
+    update.priority && update.priority !== existing.priority && update.priorityOverrideReason
+      ? ` [Priority overridden ${existing.priority} → ${update.priority}: ${update.priorityOverrideReason}]`
+      : '';
+
+  const note = `${update.adminNotes || defaultNote}${overrideTag}`;
 
   const updated: CivicIssue = {
     ...existing,
@@ -430,6 +462,7 @@ export function updateIssueStatus(
     department: nextDepartment,
     priority: nextPriority,
     adminNotes: update.adminNotes ?? existing.adminNotes,
+    resolutionEvidenceUrl: update.resolutionEvidenceUrl ?? existing.resolutionEvidenceUrl,
     updatedAt: now,
     statusHistory: [
       ...existing.statusHistory,
