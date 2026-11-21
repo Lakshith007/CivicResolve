@@ -8,6 +8,7 @@ interface CivicGoogleMapProps {
   issues: CivicIssue[];
   selectedIssueId: string | null;
   onSelectIssue: (id: string) => void;
+  includeResolved?: boolean;
 }
 
 declare global {
@@ -72,7 +73,11 @@ export function CivicGoogleMap({
   issues,
   selectedIssueId,
   onSelectIssue,
+  includeResolved = false,
 }: CivicGoogleMapProps) {
+  const activeIssues = includeResolved
+    ? issues
+    : issues.filter((issue) => issue.status !== 'Resolved');
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const markersRef = useRef<Map<string, any>>(new Map());
@@ -95,7 +100,7 @@ export function CivicGoogleMap({
 
         if (!mapRef.current) {
           mapRef.current = new window.google.maps.Map(containerRef.current, {
-            center: { lat: 12.9716, lng: 77.5946 }, // Bengaluru Civic Hub
+            center: { lat: 11.0168, lng: 76.9558 }, // Coimbatore Civic Hub
             zoom: 12,
             mapTypeControl: false,
             streetViewControl: false,
@@ -132,7 +137,7 @@ export function CivicGoogleMap({
 
     const bounds = new window.google.maps.LatLngBounds();
 
-    issues.forEach((issue) => {
+    activeIssues.forEach((issue) => {
       const position = { lat: issue.coordinates.lat, lng: issue.coordinates.lng };
       bounds.extend(position);
 
@@ -151,16 +156,16 @@ export function CivicGoogleMap({
       markersRef.current.set(issue.id, marker);
     });
 
-    if (issues.length > 0 && !selectedIssueId) {
+    if (activeIssues.length > 0 && !selectedIssueId) {
       mapRef.current.fitBounds(bounds);
     }
-  }, [issues, mapLoaded, onSelectIssue, selectedIssueId]);
+  }, [activeIssues, mapLoaded, onSelectIssue, selectedIssueId]);
 
   // Pan to selected issue
   useEffect(() => {
     if (!mapLoaded || !mapRef.current || !selectedIssueId) return;
 
-    const selectedIssue = issues.find((i) => i.id === selectedIssueId);
+    const selectedIssue = activeIssues.find((i) => i.id === selectedIssueId);
     if (selectedIssue) {
       mapRef.current.panTo({
         lat: selectedIssue.coordinates.lat,
@@ -177,7 +182,7 @@ export function CivicGoogleMap({
         }
       });
     }
-  }, [selectedIssueId, issues, mapLoaded]);
+  }, [selectedIssueId, activeIssues, mapLoaded]);
 
   return (
     <div className="relative h-64 w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-900">

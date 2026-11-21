@@ -33,12 +33,12 @@ export const DEPARTMENTS = [
 export type Department = (typeof DEPARTMENTS)[number];
 
 export const WARDS = [
-  'Ward 01 — Central Civic Core',
-  'Ward 04 — Market & Commercial District',
-  'Ward 07 — Indiranagar East',
-  'Ward 12 — Hospital & University Zone',
-  'Ward 15 — Greenbelt & Parks Corridor',
-  'Ward 19 — Industrial Ring Road',
+  'Ward 01 — Gandhipuram Central Core',
+  'Ward 04 — Town Hall & Oppanakara Market',
+  'Ward 07 — Peelamedu & Avinashi Corridor',
+  'Ward 12 — RS Puram & GH Medical Zone',
+  'Ward 15 — Race Course & VOC Park Belt',
+  'Ward 19 — Singanallur & Trichy Road Ring',
 ] as const;
 
 export interface AIAnalysisResult {

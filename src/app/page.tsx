@@ -164,7 +164,7 @@ export default function HomePage() {
               }`}
             >
               <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>Map &amp; Track ({stats.total})</span>
+              <span>Map &amp; Track ({stats.reported + stats.inProgress})</span>
             </button>
 
             <button

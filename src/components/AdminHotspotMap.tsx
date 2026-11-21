@@ -54,6 +54,7 @@ export function AdminHotspotMap({
   const [wardFilter, setWardFilter] = useState<string>('All');
   const [priorityFilter, setPriorityFilter] = useState<'All' | IssuePriority>('All');
   const [timeRange, setTimeRange] = useState<TimeRange>('all');
+  const [showResolved, setShowResolved] = useState(false);
   const [mapMode, setMapMode] = useState<'google' | 'spatial'>('google');
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -77,6 +78,7 @@ export function AdminHotspotMap({
         : null;
 
     return issues.filter((issue) => {
+      if (!showResolved && issue.status === 'Resolved') return false;
       if (departmentFilter !== 'All' && issue.department !== departmentFilter) return false;
       if (wardFilter !== 'All' && issue.ward !== wardFilter) return false;
       if (priorityFilter !== 'All' && issue.priority !== priorityFilter) return false;
@@ -86,7 +88,7 @@ export function AdminHotspotMap({
       }
       return true;
     });
-  }, [issues, departmentFilter, wardFilter, priorityFilter, timeRange]);
+  }, [issues, showResolved, departmentFilter, wardFilter, priorityFilter, timeRange]);
 
   const geolocatedIssues = useMemo(
     () =>
@@ -208,31 +210,42 @@ export function AdminHotspotMap({
           </p>
         </div>
 
-        <div className="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1">
-          <button
-            type="button"
-            onClick={() => setMapMode('google')}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-              mapMode === 'google'
-                ? 'bg-white text-blue-700 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Globe className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>Google Map</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setMapMode('spatial')}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-              mapMode === 'spatial'
-                ? 'bg-white text-blue-700 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Layers className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>Coordinate Grid</span>
-          </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">
+            <input
+              type="checkbox"
+              checked={showResolved}
+              onChange={(e) => setShowResolved(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-slate-300 text-blue-700 focus:ring-blue-500"
+            />
+            <span>Show Resolved</span>
+          </label>
+          <div className="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1">
+            <button
+              type="button"
+              onClick={() => setMapMode('google')}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                mapMode === 'google'
+                  ? 'bg-white text-blue-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Globe className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Google Map</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMapMode('spatial')}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                mapMode === 'spatial'
+                  ? 'bg-white text-blue-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Layers className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Coordinate Grid</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -353,6 +366,7 @@ export function AdminHotspotMap({
               issues={filteredIssues}
               selectedIssueId={selectedIssue?.id ?? null}
               onSelectIssue={(id) => setSelectedId(id)}
+              includeResolved={showResolved}
             />
           ) : (
             <div className="relative h-72 w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-900 p-4">

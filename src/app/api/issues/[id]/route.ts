@@ -153,6 +153,23 @@ export async function PATCH(
       );
     }
 
+    // Strict Field-Crew-First Resolution Gate:
+    // Cannot directly mark a ticket Resolved unless an authenticated Field Crew uploaded
+    // completion proof and the Administrator explicitly approved it via verificationDecision: 'approve'.
+    if (
+      validation.data.status === 'Resolved' &&
+      existing.status !== 'Resolved' &&
+      existing.fieldVerification?.verificationStatus !== 'Approved'
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            'Cannot mark Resolved directly: Dispatched Field Crew must first upload a verified completion proof photo via the Field Crew Portal (/worker), which the administrator must then approve.',
+        },
+        { status: 400 }
+      );
+    }
+
     const isPriorityChanged =
       validation.data.priority !== undefined &&
       validation.data.priority !== existing.priority;

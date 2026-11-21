@@ -113,40 +113,40 @@ interface ReportIssueFormProps {
 
 const DEMO_PRESETS = [
   {
-    label: 'Burst Water Main near Hospital',
-    title: 'Pressurized water main burst flooding Emergency Gate',
+    label: 'Burst Water Main near GH',
+    title: 'Pressurized water main burst flooding Coimbatore GH Gate',
     description:
-      'Clean drinking water pipeline ruptured beneath the pavement, flooding the ambulance lane outside District Hospital and dropping local water pressure.',
-    location: 'Hospital Main Road, Gate 2',
+      'Clean drinking water pipeline ruptured beneath the pavement, flooding the ambulance lane outside Coimbatore Medical College Hospital and dropping local water pressure.',
+    location: 'Trichy Road, Coimbatore Medical College GH Gate',
     ward: WARDS[3],
-    coordinates: { lat: 12.9635, lng: 77.5742 },
+    coordinates: { lat: 10.9964, lng: 76.9698 },
   },
   {
     label: 'Live Sparking Streetlight Wire',
     title: 'Sparking streetlight pole with exposed live wire near school',
     description:
-      'Streetlight pole #18 junction box is broken open and sparking loudly right beside the primary school pedestrian crossing.',
-    location: 'Vidya Mandir Cross, 12th Main',
+      'Streetlight pole #18 junction box on Avinashi Road is broken open and sparking loudly right beside the school pedestrian crossing.',
+    location: 'Avinashi Road, Peelamedu PSG School Cross',
     ward: WARDS[2],
-    coordinates: { lat: 12.9784, lng: 77.6408 },
+    coordinates: { lat: 11.0246, lng: 77.0028 },
   },
   {
-    label: 'Deep Highway Pothole',
-    title: 'Deep crater pothole on outer ring highway ramp',
+    label: 'Deep Flyover Pothole',
+    title: 'Deep crater pothole on Gandhipuram Flyover ramp',
     description:
-      'A 3-foot wide deep asphalt pothole filled with rainwater is causing sudden swerves and near-accidents for commuters on the highway ramp.',
-    location: 'Ring Road Eastbound Flyover Ramp',
-    ward: WARDS[5],
-    coordinates: { lat: 12.9177, lng: 77.6238 },
+      'A 3-foot wide deep asphalt pothole filled with rainwater is causing sudden swerves and near-accidents for commuters near 100 Feet Road.',
+    location: '100 Feet Road, Gandhipuram Flyover Ramp',
+    ward: WARDS[0],
+    coordinates: { lat: 11.0183, lng: 76.9674 },
   },
   {
-    label: 'Overflowing Market Garbage',
-    title: 'Overflowing municipal garbage bins at Central Market',
+    label: 'Overflowing Ukkadam Market Bins',
+    title: 'Overflowing municipal garbage bins at Ukkadam Market',
     description:
-      'Two large community waste containers have been overflowing for 3 days, blocking the footpath with rotting vegetable waste and strong odor.',
-    location: 'Central Market North Arcade',
+      'Two large community waste containers along Oppanakara Street have been overflowing for 3 days, blocking the footpath with rotting vegetable waste.',
+    location: 'Oppanakara Street, Ukkadam Market Arcade',
     ward: WARDS[1],
-    coordinates: { lat: 12.9652, lng: 77.5795 },
+    coordinates: { lat: 10.9905, lng: 76.9606 },
   },
 ];
 
@@ -190,7 +190,7 @@ export function ReportIssueForm({
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
   const [ward, setWard] = useState<string>('Auto-Detected Municipal Zone');
-  const [coordinates, setCoordinates] = useState({ lat: 12.9716, lng: 77.5946 });
+  const [coordinates, setCoordinates] = useState({ lat: 11.0168, lng: 76.9558 });
   const [gpsStatus, setGpsStatus] = useState<'idle' | 'locating' | 'locked' | 'error'>('idle');
   const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
   const [gpsMessage, setGpsMessage] = useState<string | null>(null);

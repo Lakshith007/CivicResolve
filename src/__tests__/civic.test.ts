@@ -79,8 +79,8 @@ describe('Input Validation & Sanitization', () => {
     const good = validateIssueSubmission({
       title: '<script>x</script>Broken water main on 4th Cross',
       description: 'Water has been gushing out continuously since morning.',
-      location: '4th Cross, Indiranagar',
-      ward: 'Ward 07 — Indiranagar East',
+      location: 'Avinashi Road, Peelamedu',
+      ward: 'Ward 07 — Peelamedu & Avinashi Corridor',
       reporterName: 'Rakesh',
     });
     expect(good.valid).toBe(true);
@@ -111,12 +111,12 @@ describe('Duplicate Detection & Issue Store Lifecycle', () => {
   it('detects active duplicate reports in matching location and category while ignoring resolved tickets', () => {
     const existing = getAllIssues();
 
-    // Matches CR-2026-1002 (Water Supply & Leakage at Victoria Hospital Entrance, Reported)
+    // Matches CR-2026-1002 (Water Supply & Leakage at Coimbatore Medical College GH Entrance, Reported)
     const waterMatches = findPotentialDuplicates(
       {
-        title: 'Water pipeline burst outside Victoria Hospital',
+        title: 'Water pipeline burst outside Coimbatore Medical College GH',
         description: 'Heavy water leakage flooding hospital entrance road.',
-        location: 'Victoria Hospital Fort Road',
+        location: 'Coimbatore Medical College GH Trichy Road',
         category: 'Water Supply & Leakage',
       },
       existing
@@ -126,9 +126,9 @@ describe('Duplicate Detection & Issue Store Lifecycle', () => {
     // Should NOT match CR-2026-1005 because it is already Resolved
     const resolvedMatches = findPotentialDuplicates(
       {
-        title: 'Blocked stormwater drain near MG Road Trinity Metro',
+        title: 'Blocked stormwater drain near DB Road RS Puram',
         description: 'Stagnant sewage backup at bus shelter.',
-        location: 'MG Road Trinity Metro Bus Shelter',
+        location: 'DB Road RS Puram Post Office Shelter',
         category: 'Drainage & Sewage',
       },
       existing
@@ -143,8 +143,8 @@ describe('Duplicate Detection & Issue Store Lifecycle', () => {
       title: 'Deep pothole near Community Library',
       description: 'Asphalt collapsed creating a dangerous crater for cyclists.',
       location: 'Library Main Road',
-      ward: 'Ward 01 — Central Civic Core',
-      coordinates: { lat: 12.972, lng: 77.595 },
+      ward: 'Ward 01 — Gandhipuram Central Core',
+      coordinates: { lat: 11.0168, lng: 76.9558 },
       reporterName: 'Test Citizen',
     });
 

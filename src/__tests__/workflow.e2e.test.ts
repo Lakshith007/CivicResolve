@@ -2,10 +2,12 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { POST as analyzePost } from '@/app/api/analyze/route';
 import { POST as registerPost } from '@/app/api/auth/register/route';
 import { POST as loginPost } from '@/app/api/auth/login/route';
+import { POST as workerLoginPost } from '@/app/api/auth/worker-login/route';
 import { GET as adminComplaintsGet } from '@/app/api/admin/complaints/route';
 import { GET as adminAnalyticsGet } from '@/app/api/admin/analytics/route';
 import { GET as issuesGet, POST as issuesPost } from '@/app/api/issues/route';
 import { GET as issueByIdGet, PATCH as issueByIdPatch } from '@/app/api/issues/[id]/route';
+import { POST as workerProofPost } from '@/app/api/worker/submit-proof/route';
 import { resetAuditStoreForTesting } from '@/lib/auditStore';
 import { resetRateLimitsForTesting } from '@/lib/authGuards';
 import { resetAuthStoreForTesting, SESSION_COOKIE_NAME } from '@/lib/authStore';
@@ -40,6 +42,9 @@ function makeRequest(
 const SAMPLE_PNG = `data:image/png;base64,${Buffer.from([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
 ]).toString('base64')}`;
+
+const CREW_PROOF_PNG =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR42mNk+M9QzwAEjDAGACCKAoE2l1n7AAAAAElFTkSuQmCC';
 
 describe('CivicResolve End-to-End Core Workflow', () => {
   const origEnv = { ...process.env };
@@ -112,8 +117,8 @@ describe('CivicResolve End-to-End Core Workflow', () => {
         {
           title: 'Burst drinking water pipeline outside City General Hospital',
           description: 'Clean water main burst flooding ambulance approach road.',
-          location: 'Hospital Approach Road',
-          ward: 'Ward 12 — Hospital & University Zone',
+          location: 'Trichy Road Coimbatore GH',
+          ward: 'Ward 12 — RS Puram & GH Medical Zone',
           reporterName: 'Kiran Patel',
           reporterContact: 'kiran@example.com',
           imageUrl: SAMPLE_PNG,
@@ -174,15 +179,55 @@ describe('CivicResolve End-to-End Core Workflow', () => {
     );
     expect(dispatchRes.status).toBe(200);
 
-    const resolveRes = await issueByIdPatch(
+    // Direct resolution bypass without Field Crew completion proof must be rejected -> 400
+    const directResolveBypass = await issueByIdPatch(
       makeRequest(
         `http://localhost/api/issues/${created.id}`,
         'PATCH',
         {
           status: 'Resolved',
           department: 'Water Works & Hydraulic Engineering',
+          adminNotes: 'Attempting to skip crew proof.',
+        },
+        adminCookie
+      ),
+      { params: { id: created.id } }
+    );
+    expect(directResolveBypass.status).toBe(400);
+
+    // 5b. Dispatched Field Crew authenticates and submits unique completion proof photo
+    const workerLoginRes = await workerLoginPost(
+      makeRequest('http://localhost/api/auth/worker-login', 'POST', {
+        crewUnitId: 'CREW-H2',
+        passcode: 'Crew@H2!2026',
+      })
+    );
+    expect(workerLoginRes.status).toBe(200);
+    const workerCookie = extractCookieValue(workerLoginRes, SESSION_COOKIE_NAME);
+    expect(workerCookie).toBeTruthy();
+
+    const proofRes = await workerProofPost(
+      makeRequest(
+        'http://localhost/api/worker/submit-proof',
+        'POST',
+        {
+          ticketId: created.id,
+          completionNotes: 'Main collar replaced and pressure verified on site.',
+          completionPhotoUrl: CREW_PROOF_PNG,
+        },
+        workerCookie
+      )
+    );
+    expect(proofRes.status).toBe(200);
+
+    // 5c. Admin verifies crew completion proof and marks ticket Resolved
+    const resolveRes = await issueByIdPatch(
+      makeRequest(
+        `http://localhost/api/issues/${created.id}`,
+        'PATCH',
+        {
+          verificationDecision: 'approve',
           adminNotes: 'Main collar replaced and pressure verified.',
-          resolutionEvidenceUrl: SAMPLE_PNG,
         },
         adminCookie
       ),
@@ -190,7 +235,7 @@ describe('CivicResolve End-to-End Core Workflow', () => {
     );
     expect(resolveRes.status).toBe(200);
 
-    // 6. Citizen inspects final Resolved state, 3-stage timeline, and resolution evidence
+    // 6. Citizen inspects final Resolved state, 4-stage timeline (Reported -> In Progress -> Proof Posted -> Resolved), and resolution evidence
     const trackRes = await issueByIdGet(
       makeRequest(`http://localhost/api/issues/${created.id}`, 'GET', undefined, citizenCookie),
       { params: { id: created.id } }
@@ -198,10 +243,10 @@ describe('CivicResolve End-to-End Core Workflow', () => {
     expect(trackRes.status).toBe(200);
     const trackJson = await trackRes.json();
     expect(trackJson.issue.status).toBe('Resolved');
-    expect(trackJson.issue.statusHistory).toHaveLength(3);
-    expect(trackJson.issue.resolutionEvidenceUrl).toBe(SAMPLE_PNG);
+    expect(trackJson.issue.statusHistory).toHaveLength(4);
+    expect(trackJson.issue.resolutionEvidenceUrl).toBe(CREW_PROOF_PNG);
 
-    // 7. Admin verifies immutable audit log recorded both dispatch & resolution
+    // 7. Admin verifies immutable audit log recorded dispatch, worker proof & verified resolution
     const analyticsRes = await adminAnalyticsGet(
       makeRequest('http://localhost/api/admin/analytics', 'GET', undefined, adminCookie)
     );
@@ -210,6 +255,6 @@ describe('CivicResolve End-to-End Core Workflow', () => {
     const ticketLogs = analyticsJson.auditLogs.filter(
       (l: { targetTicketId: string }) => l.targetTicketId === created.id
     );
-    expect(ticketLogs).toHaveLength(2);
+    expect(ticketLogs.length).toBeGreaterThanOrEqual(3);
   });
 });

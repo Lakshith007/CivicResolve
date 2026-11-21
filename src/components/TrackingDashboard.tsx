@@ -34,10 +34,10 @@ interface TrackingDashboardProps {
 }
 
 const PIN_BOUNDS = {
-  minLat: 12.905,
-  maxLat: 12.995,
-  minLng: 77.555,
-  maxLng: 77.655,
+  minLat: 10.975,
+  maxLat: 11.045,
+  minLng: 76.925,
+  maxLng: 77.025,
 };
 
 function projectCoordinates(lat: number, lng: number): { x: number; y: number } {
@@ -82,8 +82,17 @@ export function TrackingDashboard({
     });
   }, [issues, search, statusFilter, categoryFilter, priorityFilter, onlyMine, currentUser]);
 
+  const activeMapIssues = useMemo(
+    () => filteredIssues.filter((i) => i.status !== 'Resolved'),
+    [filteredIssues]
+  );
+
   const selectedMapIssue =
-    filteredIssues.find((i) => i.id === selectedMapIssueId) ?? filteredIssues[0] ?? null;
+    activeMapIssues.find((i) => i.id === selectedMapIssueId) ??
+    filteredIssues.find((i) => i.id === selectedMapIssueId) ??
+    activeMapIssues[0] ??
+    filteredIssues[0] ??
+    null;
 
   const handleUpvote = async (id: string) => {
     setUpvotingId(id);
@@ -100,10 +109,14 @@ export function TrackingDashboard({
       <section aria-label="Civic metrics summary" className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Total Complaints
+            Active Open Issues
           </p>
-          <p className="mt-1 text-2xl font-extrabold text-slate-900">{stats.total}</p>
-          <p className="mt-0.5 text-xs text-slate-600">{stats.reported} awaiting dispatch</p>
+          <p className="mt-1 text-2xl font-extrabold text-slate-900">
+            {stats.reported + stats.inProgress}
+          </p>
+          <p className="mt-0.5 text-xs text-slate-600">
+            {stats.reported} awaiting dispatch · {stats.total} logged
+          </p>
         </div>
         <div className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-4 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">
@@ -141,7 +154,7 @@ export function TrackingDashboard({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-slate-900">
-                  City Ward Hotspot Map ({filteredIssues.length} plotted)
+                  City Hotspot Map ({activeMapIssues.length} active plotted)
                 </h2>
                 <div className="flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-xs">
                   <button
@@ -190,7 +203,7 @@ export function TrackingDashboard({
 
           {mapMode === 'google' ? (
             <CivicGoogleMap
-              issues={filteredIssues}
+              issues={activeMapIssues}
               selectedIssueId={selectedMapIssue?.id ?? null}
               onSelectIssue={(id) => {
                 setSelectedMapIssueId(id);
@@ -216,10 +229,10 @@ export function TrackingDashboard({
               </svg>
 
               <div className="pointer-events-none absolute left-3 top-2.5 rounded bg-slate-800/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-300">
-                Municipal Spatial Grid
+                Coimbatore Municipal Spatial Grid
               </div>
 
-              {filteredIssues.map((issue) => {
+              {activeMapIssues.map((issue) => {
                 const pos = projectCoordinates(issue.coordinates.lat, issue.coordinates.lng);
                 const isSelected = selectedMapIssue?.id === issue.id;
                 const pinColor =

@@ -130,7 +130,7 @@ export function validateIssueSubmission(payload: unknown): ValidationResult<Sani
   const title = sanitizeText(raw.title, 140);
   const description = sanitizeText(raw.description, 2000);
   const location = sanitizeText(raw.location, 200);
-  const ward = sanitizeText(raw.ward, 100) || 'Ward 01 — Central Civic Core';
+  const ward = sanitizeText(raw.ward, 100) || 'Ward 01 — Gandhipuram Central Core';
   const reporterName = sanitizeText(raw.reporterName, 80) || 'Concerned Citizen';
   const reporterContact = sanitizeText(raw.reporterContact, 100) || undefined;
 
@@ -157,7 +157,7 @@ export function validateIssueSubmission(payload: unknown): ValidationResult<Sani
     }
   }
 
-  let coordinates = { lat: 12.9716, lng: 77.5946 };
+  let coordinates = { lat: 11.0168, lng: 76.9558 };
   if (raw.coordinates && typeof raw.coordinates === 'object') {
     const coords = raw.coordinates as Record<string, unknown>;
     const lat = Number(coords.lat);

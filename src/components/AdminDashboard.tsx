@@ -238,6 +238,7 @@ export function AdminDashboard({
     const awaitingDispatch = issues.filter((i) => i.status === 'Reported').length;
     const inProgress = issues.filter((i) => i.status === 'In Progress').length;
     const resolved = issues.filter((i) => i.status === 'Resolved').length;
+    const activeOpen = awaitingDispatch + inProgress;
     const criticalActive = issues.filter(
       (i) => i.priority === 'Critical' && i.status !== 'Resolved'
     ).length;
@@ -246,6 +247,7 @@ export function AdminDashboard({
 
     return {
       total,
+      activeOpen,
       awaitingDispatch,
       inProgress,
       resolved,
@@ -412,12 +414,14 @@ export function AdminDashboard({
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-            Total Complaints
+            Active Complaints
           </p>
           <Activity className="h-4 w-4 text-blue-700" aria-hidden="true" />
         </div>
-        <p className="mt-2 text-2xl font-extrabold text-slate-900">{kpis.total}</p>
-        <p className="mt-0.5 text-[11px] text-slate-500">Avg Urgency: {stats.averageUrgency}/100</p>
+        <p className="mt-2 text-2xl font-extrabold text-slate-900">{kpis.activeOpen}</p>
+        <p className="mt-0.5 text-[11px] text-slate-500">
+          Total logged: {kpis.total} · Avg Urgency: {stats.averageUrgency}/100
+        </p>
       </div>
 
       <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4 shadow-sm">
@@ -913,15 +917,22 @@ export function AdminDashboard({
                             Dispatch
                           </button>
                         )}
-                        {issue.status === 'In Progress' && (
-                          <button
-                            type="button"
-                            onClick={() => handleQuickAdvance(issue, 'Resolved')}
-                            className="focus-ring rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-800 hover:bg-emerald-100"
-                          >
-                            Mark Resolved
-                          </button>
-                        )}
+                        {issue.status === 'In Progress' &&
+                          issue.fieldVerification?.verificationStatus === 'Pending Verification' && (
+                            <button
+                              type="button"
+                              onClick={() => openTriageModal(issue, 'general')}
+                              className="focus-ring rounded-lg border border-violet-300 bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-900 hover:bg-violet-100"
+                            >
+                              Verify Proof &amp; Resolve
+                            </button>
+                          )}
+                        {issue.status === 'In Progress' &&
+                          issue.fieldVerification?.verificationStatus !== 'Pending Verification' && (
+                            <span className="inline-flex items-center rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-800">
+                              Awaiting Crew Photo
+                            </span>
+                          )}
                         <button
                           type="button"
                           onClick={() => openTriageModal(issue, 'general')}
@@ -1583,12 +1594,26 @@ export function AdminDashboard({
                     onChange={(e) => setStatus(e.target.value as IssueStatus)}
                     className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
                   >
-                    {ISSUE_STATUSES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
+                    {ISSUE_STATUSES.map((s) => {
+                      const canResolve =
+                        editingIssue.status === 'Resolved' ||
+                        editingIssue.fieldVerification?.verificationStatus === 'Approved';
+                      return (
+                        <option key={s} value={s} disabled={s === 'Resolved' && !canResolve}>
+                          {s === 'Resolved' && !canResolve
+                            ? 'Resolved (Requires Crew Proof & Approval)'
+                            : s}
+                        </option>
+                      );
+                    })}
                   </select>
+                  {editingIssue.status !== 'Resolved' &&
+                    editingIssue.fieldVerification?.verificationStatus !== 'Approved' && (
+                      <p className="mt-1 text-[10px] text-amber-800">
+                        Tickets can only be marked Resolved after Field Crew posts a completion photo
+                        and you approve it above.
+                      </p>
+                    )}
                 </div>
 
                 <div>
