@@ -14,6 +14,7 @@ import {
   updateIssueStatus,
   upvoteIssue,
 } from '@/lib/issueStore';
+import { syncStatusUpdateToFirestore } from '@/lib/firebase';
 import { validateStatusUpdate, validateTicketId } from '@/lib/validation';
 
 export async function GET(
@@ -74,6 +75,7 @@ export async function PATCH(
       if (!updated) {
         return NextResponse.json({ error: 'Civic issue ticket not found.' }, { status: 404 });
       }
+      void syncStatusUpdateToFirestore(context.params.id, { upvotes: updated.upvotes });
       const viewer = authenticateUser(request);
       return NextResponse.json({
         issue: toPublicIssue(updated, viewer),
@@ -120,6 +122,14 @@ export async function PATCH(
     if (!updated) {
       return NextResponse.json({ error: 'Civic issue ticket not found.' }, { status: 404 });
     }
+
+    void syncStatusUpdateToFirestore(context.params.id, {
+      status: updated.status,
+      department: updated.department,
+      priority: updated.priority,
+      adminNotes: updated.adminNotes,
+      statusHistory: updated.statusHistory,
+    });
 
     recordAuditLog({
       actor: adminGuard.user,

@@ -14,6 +14,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import type { CivicIssue, DashboardStats, SessionUser } from '@/types/civic';
+import { initAnalytics } from '@/lib/firebase';
 import { ReportIssueForm } from '@/components/ReportIssueForm';
 import { TrackingDashboard } from '@/components/TrackingDashboard';
 import { AuthModal } from '@/components/AuthModal';
@@ -65,6 +66,7 @@ export default function HomePage() {
   useEffect(() => {
     void fetchSession();
     void fetchIssues();
+    void initAnalytics();
   }, [fetchSession, fetchIssues]);
 
   const handleIssueCreated = (newIssue: CivicIssue) => {

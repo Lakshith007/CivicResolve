@@ -28,9 +28,10 @@ Built for **PromptWars 2026**, **CivicResolve** transforms how citizens report l
 
 - **Framework**: Next.js 14 (App Router, TypeScript)
 - **Styling & Icons**: Tailwind CSS, `lucide-react`
-- **AI Integration**: Google Gemini REST API (`gemini-2.0-flash` / `gemini-1.5-flash`) with multimodal image support + deterministic heuristic fallback (`src/lib/aiClassifier.ts`)
-- **Data Persistence**: File-backed JSON store (`data/issues.json`) with automatic in-memory fallback and 6 seeded civic records
-- **Testing**: Vitest (`src/__tests__/civic.test.ts`)
+- **AI Integration**: Google Gemini REST API (`gemini-flash-lite-latest` / `gemini-3-flash-preview`) with multimodal image support + deterministic heuristic fallback (`src/lib/aiClassifier.ts`)
+- **Cloud & Database Integration**: Google Cloud Firebase (`civic-sence-4ef70`) with Cloud Firestore issue mirroring (`src/lib/firebase.ts`) and browser-supported Google Analytics
+- **Data Persistence**: Resilient dual-layer: Cloud Firestore sync + file-backed JSON store (`data/issues.json`) with in-memory fallback
+- **Testing**: Vitest (`src/__tests__/civic.test.ts`, `security.rbac.test.ts`, `workflow.e2e.test.ts`)
 
 ---
 

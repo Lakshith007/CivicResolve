@@ -13,6 +13,7 @@ import {
   getDashboardStats,
   toPublicIssue,
 } from '@/lib/issueStore';
+import { syncIssueToFirestore } from '@/lib/firebase';
 import { validateIssueSubmission } from '@/lib/validation';
 
 export async function GET(request: Request) {
@@ -106,6 +107,9 @@ export async function POST(request: Request) {
       aiAnalysis: analysis,
       reporterUserId: viewer?.id,
     });
+
+    // Asynchronously mirror to Google Firebase Firestore (non-blocking fallback)
+    void syncIssueToFirestore(created);
 
     return NextResponse.json(
       {
