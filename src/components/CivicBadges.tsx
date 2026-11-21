@@ -11,6 +11,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import type { IssuePriority, IssueStatus, StatusHistoryEntry } from '@/types/civic';
+import { formatDateTime } from '@/lib/dateFormat';
 
 export function PriorityBadge({ priority }: { priority: IssuePriority }) {
   const styles: Record<IssuePriority, { bg: string; icon: React.ReactNode }> = {
@@ -148,13 +149,7 @@ export function ResolutionTimeline({
               <span className="font-semibold text-slate-800">{entry.status}</span>
               <span className="text-slate-600">• {entry.updatedBy}</span>
               <time suppressHydrationWarning className="text-slate-600" dateTime={entry.timestamp}>
-                {new Intl.DateTimeFormat('en-IN', {
-                  month: 'short',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  timeZone: 'Asia/Kolkata',
-                }).format(new Date(entry.timestamp))}
+                {formatDateTime(entry.timestamp)}
               </time>
             </div>
             <p className="mt-0.5 text-slate-600">{entry.note}</p>

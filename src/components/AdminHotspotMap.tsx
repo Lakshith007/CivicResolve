@@ -22,6 +22,8 @@ import {
 } from '@/types/civic';
 import { CivicGoogleMap } from '@/components/CivicGoogleMap';
 import { PriorityBadge, StatusBadge } from '@/components/CivicBadges';
+import { formatDateTime } from '@/lib/dateFormat';
+import { computeSpatialBounds, haversineKm, projectToSpatialGrid } from '@/lib/geoUtils';
 
 interface AdminHotspotMapProps {
   issues: CivicIssue[];
@@ -30,20 +32,6 @@ interface AdminHotspotMapProps {
 }
 
 type TimeRange = 'all' | '24h' | '7d' | '30d';
-
-function haversineKm(
-  a: { lat: number; lng: number },
-  b: { lat: number; lng: number }
-): number {
-  const toRad = (deg: number) => (deg * Math.PI) / 180;
-  const R = 6371;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(h));
-}
 
 export function AdminHotspotMap({
   issues,
@@ -174,21 +162,15 @@ export function AdminHotspotMap({
   }, [filteredIssues, selectedId]);
 
   // Compute real spatial bounds for fallback coordinate plot (never fake coordinates)
-  const spatialBounds = useMemo(() => {
-    if (geolocatedIssues.length === 0) return null;
-    const lats = geolocatedIssues.map((i) => i.coordinates!.lat);
-    const lngs = geolocatedIssues.map((i) => i.coordinates!.lng);
-    const minLat = Math.min(...lats);
-    const maxLat = Math.max(...lats);
-    const minLng = Math.min(...lngs);
-    const maxLng = Math.max(...lngs);
-    return {
-      minLat,
-      maxLat: maxLat === minLat ? minLat + 0.01 : maxLat,
-      minLng,
-      maxLng: maxLng === minLng ? minLng + 0.01 : maxLng,
-    };
-  }, [geolocatedIssues]);
+  const spatialBounds = useMemo(
+    () =>
+      computeSpatialBounds(
+        geolocatedIssues
+          .map((i) => i.coordinates)
+          .filter((coords): coords is { lat: number; lng: number } => Boolean(coords))
+      ),
+    [geolocatedIssues]
+  );
 
   return (
     <section
@@ -387,17 +369,13 @@ export function AdminHotspotMap({
                 </div>
               ) : (
                 geolocatedIssues.map((issue) => {
-                  const xPct =
-                    10 +
-                    ((issue.coordinates!.lng - spatialBounds.minLng) /
-                      (spatialBounds.maxLng - spatialBounds.minLng)) *
-                      80;
-                  const yPct =
-                    12 +
-                    (1 -
-                      (issue.coordinates!.lat - spatialBounds.minLat) /
-                        (spatialBounds.maxLat - spatialBounds.minLat)) *
-                      76;
+                  if (!issue.coordinates) return null;
+                  const { x: xPct, y: yPct } = projectToSpatialGrid(
+                    issue.coordinates.lat,
+                    issue.coordinates.lng,
+                    spatialBounds,
+                    { x: 10, y: 12 }
+                  );
                   const isSelected = selectedIssue?.id === issue.id;
                   const dotColor =
                     issue.priority === 'Critical'
@@ -480,12 +458,7 @@ export function AdminHotspotMap({
                   <div className="flex items-center gap-1.5 text-slate-500">
                     <Clock className="h-3.5 w-3.5" aria-hidden="true" />
                     <span suppressHydrationWarning>
-                      Reported{' '}
-                      {new Intl.DateTimeFormat('en-IN', {
-                        dateStyle: 'medium',
-                        timeStyle: 'short',
-                        timeZone: 'Asia/Kolkata',
-                      }).format(new Date(selectedIssue.createdAt))}
+                      Reported {formatDateTime(selectedIssue.createdAt)}
                     </span>
                   </div>
                 </div>

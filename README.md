@@ -173,10 +173,13 @@ civic-resolve/
     │   ├── worker/page.tsx                 # Server-guarded Field Crew Portal
     │   ├── icon.svg, layout.tsx & page.tsx # App icon, metadata & 3-role landing + Citizen Portal
     ├── components/
+    │   ├── admin/                          # Modular Admin KPI, queue, reports, audit & triage modal panels
+    │   ├── citizen/                        # Demo scenarios bar, AI preview card & photo evidence field
+    │   ├── worker/                         # Field crew job card & completion proof submission modal
     │   ├── AdminAccessGate.tsx             # Admin unauthenticated screen with 2FA modal trigger
     │   ├── AdminAuthModal.tsx              # 2-Step Admin credential + 6-digit OTP modal
     │   ├── AdminCommandClient.tsx          # Admin header, notifications, profile menu & 6-tab router
-    │   ├── AdminDashboard.tsx              # KPIs, Critical Alerts, Before/After Review, Workloads, Queue & Audit
+    │   ├── AdminDashboard.tsx              # Admin Command Center section orchestrator
     │   ├── AdminHotspotMap.tsx             # Filtered hotspot map with Haversine clustering & Show Resolved toggle
     │   ├── CivicBadges.tsx                 # Priority/Status/Engine badges & Resolution Timeline stepper
     │   ├── CivicGoogleMap.tsx              # Coimbatore Google Maps renderer (auto-hides resolved pins)
@@ -184,18 +187,21 @@ civic-resolve/
     │   ├── ReportIssueForm.tsx             # Citizen form, GPS + reverse-geocoding, Pick on Map & AI Preview
     │   ├── TrackingDashboard.tsx           # Citizen tracking board, Coimbatore Spatial Grid & hotspot map
     │   ├── WorkerAccessGate.tsx            # Field Crew Unit ID sign-in screen
-    │   └── WorkerPortalClient.tsx          # Division-scoped dispatched jobs & completion proof uploader
+    │   └── WorkerPortalClient.tsx          # Division-scoped dispatched jobs & proof workflow orchestrator
     ├── lib/
     │   ├── aiClassifier.ts                 # Gemini multimodal client + fallback + duplicate detector
     │   ├── auditStore.ts                   # Immutable audit log + Firestore sync
     │   ├── authGuards.ts                   # requireAuth, requireCitizen, requireWorker, requireAdmin, CSRF & RL
     │   ├── authStore.ts                    # scrypt hashing, HMAC sessions, 2FA tokens & Crew accounts
+    │   ├── civicKeywords.ts                # Category rules, urgency amplifiers/dampeners & SLA mappings
     │   ├── dateFormat.ts                   # Deterministic IST date, age & duration formatters
     │   ├── firebase.ts                     # Firebase initialization & two-way Firestore sync
     │   ├── firebaseClient.ts               # Lightweight browser Firebase Analytics client (no Firestore SDK)
+    │   ├── geoUtils.ts                     # Haversine clustering, Coimbatore bounds & spatial grid projection
     │   ├── googleMapsLoader.ts             # Shared Google Maps async loader & gm_authFailure handler
     │   ├── imageCompress.ts                # Client canvas photo resizing & JPEG compression
-    │   ├── issueStore.ts                   # Coimbatore seed store, proof/approval & SHA-256 duplicate photo check
+    │   ├── issueStore.ts                   # Proof/approval lifecycle & SHA-256 duplicate photo check
+    │   ├── seedIssues.ts                   # Initial Coimbatore municipal complaint dataset
     │   └── validation.ts                   # Sanitization & PNG/JPEG/WebP magic-byte enforcement
     └── types/
         └── civic.ts                        # Shared TypeScript contracts & Coimbatore wards/departments

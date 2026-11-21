@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   AlertCircle,
-  Camera,
   Check,
   CheckCircle2,
   Compass,
@@ -13,24 +12,21 @@ import {
   Map as MapIcon,
   MapPin,
   Send,
-  ShieldAlert,
   Sparkles,
-  ThumbsUp,
-  Upload,
-  X,
 } from 'lucide-react';
 import {
   ISSUE_CATEGORIES,
-  WARDS,
   type AIAnalysisResult,
   type CivicIssue,
-  type IssuePriority,
-  type IssueStatus,
   type SessionUser,
 } from '@/types/civic';
-import { EngineBadge, PriorityBadge } from '@/components/CivicBadges';
 import { LocationPickerMap } from '@/components/LocationPickerMap';
-import { compressImageFile } from '@/lib/imageCompress';
+import { DemoScenariosBar, type DemoScenario } from '@/components/citizen/DemoScenariosBar';
+import {
+  AiTriagePreviewCard,
+  type DuplicateMatch,
+} from '@/components/citizen/AiTriagePreviewCard';
+import { PhotoEvidenceField } from '@/components/citizen/PhotoEvidenceField';
 
 async function reverseGeocodeCoordinates(
   lat: number,
@@ -43,12 +39,8 @@ async function reverseGeocodeCoordinates(
       `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(
         lat
       )}&lon=${encodeURIComponent(lng)}&zoom=18&addressdetails=1`,
-      {
-        headers: { Accept: 'application/json' },
-        signal: controller.signal,
-      }
+      { headers: { Accept: 'application/json' }, signal: controller.signal }
     );
-
     if (res.ok) {
       const data = (await res.json()) as {
         display_name?: string;
@@ -68,7 +60,6 @@ async function reverseGeocodeCoordinates(
         addr.town ||
         '';
       const city = addr.city || addr.town || addr.state_district || '';
-
       const formatted = [street, locality, city].filter(Boolean).join(', ');
       const resolvedAddress =
         formatted.length >= 3
@@ -76,7 +67,6 @@ async function reverseGeocodeCoordinates(
           : data.display_name
           ? data.display_name.split(',').slice(0, 3).join(',').trim()
           : `GPS Pin (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
-
       return {
         address: resolvedAddress,
         zone: locality || city || 'GPS Located Zone',
@@ -88,21 +78,11 @@ async function reverseGeocodeCoordinates(
   } finally {
     clearTimeout(timer);
   }
-
   return {
     address: `GPS Pin (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
     zone: 'GPS Located Zone',
     resolved: false,
   };
-}
-
-interface DuplicateMatch {
-  id: string;
-  title: string;
-  location: string;
-  status: IssueStatus;
-  priority: IssuePriority;
-  upvotes: number;
 }
 
 interface ReportIssueFormProps {
@@ -112,75 +92,7 @@ interface ReportIssueFormProps {
   onUpvoteExisting: (id: string) => Promise<void>;
 }
 
-const DEMO_PRESETS = [
-  {
-    label: 'Burst Water Main near GH',
-    title: 'Pressurized water main burst flooding Coimbatore GH Gate',
-    description:
-      'Clean drinking water pipeline ruptured beneath the pavement, flooding the ambulance lane outside Coimbatore Medical College Hospital and dropping local water pressure.',
-    location: 'Trichy Road, Coimbatore Medical College GH Gate',
-    ward: WARDS[3],
-    coordinates: { lat: 10.9964, lng: 76.9698 },
-  },
-  {
-    label: 'Live Sparking Streetlight Wire',
-    title: 'Sparking streetlight pole with exposed live wire near school',
-    description:
-      'Streetlight pole #18 junction box on Avinashi Road is broken open and sparking loudly right beside the school pedestrian crossing.',
-    location: 'Avinashi Road, Peelamedu PSG School Cross',
-    ward: WARDS[2],
-    coordinates: { lat: 11.0246, lng: 77.0028 },
-  },
-  {
-    label: 'Deep Flyover Pothole',
-    title: 'Deep crater pothole on Gandhipuram Flyover ramp',
-    description:
-      'A 3-foot wide deep asphalt pothole filled with rainwater is causing sudden swerves and near-accidents for commuters near 100 Feet Road.',
-    location: '100 Feet Road, Gandhipuram Flyover Ramp',
-    ward: WARDS[0],
-    coordinates: { lat: 11.0183, lng: 76.9674 },
-  },
-  {
-    label: 'Overflowing Ukkadam Market Bins',
-    title: 'Overflowing municipal garbage bins at Ukkadam Market',
-    description:
-      'Two large community waste containers along Oppanakara Street have been overflowing for 3 days, blocking the footpath with rotting vegetable waste.',
-    location: 'Oppanakara Street, Ukkadam Market Arcade',
-    ward: WARDS[1],
-    coordinates: { lat: 10.9905, lng: 76.9606 },
-  },
-];
-
-function createSamplePngDataUri(label: string, accent: string): string {
-  if (typeof document === 'undefined') return '';
-  const canvas = document.createElement('canvas');
-  canvas.width = 640;
-  canvas.height = 360;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return '';
-
-  ctx.fillStyle = '#1e293b';
-  ctx.fillRect(0, 0, 640, 360);
-  ctx.fillStyle = '#0f172a';
-  ctx.fillRect(24, 24, 592, 312);
-  ctx.strokeStyle = accent;
-  ctx.lineWidth = 4;
-  ctx.strokeRect(24, 24, 592, 312);
-
-  ctx.fillStyle = '#f8fafc';
-  ctx.font = 'bold 24px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('FIELD PHOTO', 320, 160);
-  ctx.fillStyle = '#cbd5e1';
-  ctx.font = '18px sans-serif';
-  ctx.fillText(label, 320, 210);
-  ctx.fillStyle = '#64748b';
-  ctx.font = '13px sans-serif';
-  ctx.fillText('CivicResolve Verified PNG Preview', 320, 250);
-
-  return canvas.toDataURL('image/png');
-}
-
+/** Citizen issue reporting orchestrator with GPS/map pinning, image compression & Gemini AI triage preview. */
 export function ReportIssueForm({
   currentUser,
   onIssueCreated,
@@ -227,19 +139,23 @@ export function ReportIssueForm({
     }
   };
 
-  const applyPreset = (preset: (typeof DEMO_PRESETS)[number]) => {
-    setTitle(preset.title);
-    setDescription(preset.description);
-    setLocation(preset.location);
-    setWard(preset.ward);
-    setCoordinates(preset.coordinates);
+  const resetSecondaryState = () => {
     setGpsStatus('idle');
     setGpsAccuracy(null);
     setGpsMessage(null);
     setShowMapPicker(false);
     setUserCategory('auto');
-    setAnalysis(null);
     setDuplicates([]);
+  };
+
+  const applyPreset = (preset: DemoScenario) => {
+    setTitle(preset.title);
+    setDescription(preset.description);
+    setLocation(preset.location);
+    setWard(preset.ward);
+    setCoordinates(preset.coordinates);
+    resetSecondaryState();
+    setAnalysis(null);
     setErrorMessage(null);
     setSubmittedTicket(null);
   };
@@ -278,20 +194,15 @@ export function ReportIssueForm({
         const lat = Number(pos.coords.latitude.toFixed(5));
         const lng = Number(pos.coords.longitude.toFixed(5));
         const accuracy = Number.isFinite(pos.coords.accuracy) ? Math.round(pos.coords.accuracy) : null;
-
         setCoordinates({ lat, lng });
         setGpsAccuracy(accuracy);
 
         const geo = await reverseGeocodeCoordinates(lat, lng);
-        if (geo.resolved || !location.trim()) {
-          setLocation(geo.address);
-        }
+        if (geo.resolved || !location.trim()) setLocation(geo.address);
         setWard(geo.zone);
         setGpsStatus('locked');
         setGpsMessage(
-          geo.resolved
-            ? 'Live street address & coordinates resolved via GPS'
-            : 'GPS coordinates locked'
+          geo.resolved ? 'Live street address & coordinates resolved via GPS' : 'GPS coordinates locked'
         );
         setIsLocating(false);
       },
@@ -300,9 +211,7 @@ export function ReportIssueForm({
         setGpsStatus('error');
         setGpsAccuracy(null);
         if (err.code === 1) {
-          setGpsMessage(
-            'Location permission denied. Enable browser location access or pick a spot on the map below.'
-          );
+          setGpsMessage('Location permission denied. Enable browser location access or pick a spot on the map below.');
         } else if (err.code === 3) {
           setGpsMessage('GPS signal timed out. Use Pick on Map or type your location manually.');
         } else {
@@ -313,45 +222,18 @@ export function ReportIssueForm({
     );
   };
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-      setErrorMessage('Only PNG, JPEG, or WebP images are permitted.');
-      return;
-    }
-    if (file.size > 10_000_000) {
-      setErrorMessage('Please upload an image smaller than 10 MB.');
-      return;
-    }
-    try {
-      const compressed = await compressImageFile(file);
-      setImageUrl(compressed);
-      setErrorMessage(null);
-    } catch {
-      setErrorMessage('Unable to process the selected image file.');
-    }
-  };
-
   const handleAnalyze = async () => {
     setErrorMessage(null);
     if (title.trim().length < 5 || description.trim().length < 10) {
       setErrorMessage('Enter a descriptive title (5+ chars) and description (10+ chars) to run AI triage.');
       return;
     }
-
     setIsAnalyzing(true);
     try {
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title,
-          description,
-          location,
-          userCategory,
-          imageBase64: imageUrl,
-        }),
+        body: JSON.stringify({ title, description, location, userCategory, imageBase64: imageUrl }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -406,13 +288,8 @@ export function ReportIssueForm({
         setLocation('');
         setWard('Auto-Detected Municipal Zone');
         setCoordinates({ lat: 11.0168, lng: 76.9558 });
-        setUserCategory('auto');
-        setGpsStatus('idle');
-        setGpsAccuracy(null);
-        setGpsMessage(null);
-        setShowMapPicker(false);
         setImageUrl(undefined);
-        setDuplicates([]);
+        resetSecondaryState();
       }
     } catch {
       setErrorMessage('Network error while submitting report.');
@@ -423,33 +300,7 @@ export function ReportIssueForm({
 
   return (
     <div className="space-y-6">
-      {/* 1-Click Demo Presets */}
-      <section
-        aria-label="Quick demo complaint presets"
-        className="rounded-2xl border border-blue-200/90 bg-gradient-to-r from-blue-50/90 to-indigo-50/80 p-4 shadow-sm sm:p-5"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 shrink-0 text-blue-700" aria-hidden="true" />
-            <h2 className="text-sm font-semibold text-blue-950">
-              1-Click Demo Scenarios (Pre-fill &amp; Test AI Classification)
-            </h2>
-          </div>
-          <span className="text-xs font-medium text-blue-800">Click any scenario to auto-fill</span>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {DEMO_PRESETS.map((preset) => (
-            <button
-              key={preset.label}
-              type="button"
-              onClick={() => applyPreset(preset)}
-              className="focus-ring min-h-[38px] rounded-xl border border-blue-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-900 shadow-sm transition hover:border-blue-400 hover:bg-blue-50"
-            >
-              {preset.label}
-            </button>
-          ))}
-        </div>
-      </section>
+      <DemoScenariosBar onSelectPreset={applyPreset} />
 
       {submittedTicket && (
         <div
@@ -495,7 +346,6 @@ export function ReportIssueForm({
       )}
 
       <div className="grid gap-6 lg:grid-cols-12">
-        {/* Citizen Report Form */}
         <form
           onSubmit={handleSubmit}
           className="min-w-0 space-y-5 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm sm:p-6 lg:col-span-7"
@@ -627,7 +477,6 @@ export function ReportIssueForm({
               </div>
             )}
 
-            {/* Live GPS Verification Strip */}
             <div aria-live="polite" className="space-y-2">
               {gpsStatus === 'locating' && (
                 <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-900">
@@ -740,58 +589,11 @@ export function ReportIssueForm({
             </div>
           </div>
 
-          {/* Photo Attachment */}
-          <div>
-            <label htmlFor="issue-photo-upload" className="block text-sm font-semibold text-slate-800">
-              Evidence Photo (Optional)
-            </label>
-            <div className="mt-1.5 flex flex-wrap items-center gap-3">
-              <label
-                htmlFor="issue-photo-upload"
-                className="inline-flex min-h-[42px] cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-2.5 text-xs font-semibold text-slate-700 transition hover:border-blue-400 hover:bg-blue-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-600 focus-within:ring-offset-2"
-              >
-                <Upload className="h-4 w-4 text-blue-600" aria-hidden="true" />
-                <span>Upload Photo</span>
-                <input
-                  id="issue-photo-upload"
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  onChange={handleFileUpload}
-                  className="sr-only"
-                />
-              </label>
-
-              <button
-                type="button"
-                onClick={() => {
-                  const png = createSamplePngDataUri('Road Damage Evidence #01', '#f59e0b');
-                  if (png) setImageUrl(png);
-                }}
-                className="focus-ring inline-flex min-h-[42px] items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-              >
-                <Camera className="h-3.5 w-3.5 text-slate-600" aria-hidden="true" />
-                <span>Attach Sample Photo</span>
-              </button>
-            </div>
-
-            {imageUrl && (
-              <div className="relative mt-3 inline-block overflow-hidden rounded-xl border border-slate-200">
-                <img
-                  src={imageUrl}
-                  alt="Uploaded civic issue preview"
-                  className="h-32 w-56 object-cover"
-                />
-                <button
-                  type="button"
-                  onClick={() => setImageUrl(undefined)}
-                  aria-label="Remove attached photo"
-                  className="focus-ring absolute right-2 top-2 rounded-full bg-slate-900/80 p-1 text-white hover:bg-slate-900"
-                >
-                  <X className="h-3.5 w-3.5" aria-hidden="true" />
-                </button>
-              </div>
-            )}
-          </div>
+          <PhotoEvidenceField
+            imageUrl={imageUrl}
+            onChangeImage={setImageUrl}
+            onError={setErrorMessage}
+          />
 
           <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row">
             <button
@@ -823,180 +625,16 @@ export function ReportIssueForm({
           </div>
         </form>
 
-        {/* Live AI Preview & Duplicate Guard */}
-        <aside className="min-w-0 space-y-5 lg:sticky lg:top-24 lg:col-span-5 lg:self-start" aria-label="AI Classification Preview">
-          <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm sm:p-6">
-            <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-4">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-100 text-violet-700">
-                  <Sparkles className="h-5 w-5" aria-hidden="true" />
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-slate-900">AI Triage Preview</h2>
-                  <p className="text-xs text-slate-600">Powered by Google Gemini</p>
-                </div>
-              </div>
-              {analysis && <EngineBadge engine={analysis.engine} />}
-            </div>
-
-            <div aria-live="polite">
-              {isAnalyzing && (
-                <p className="sr-only">Analyzing civic issue details with Gemini AI...</p>
-              )}
-              {!analysis ? (
-                <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-9 text-center">
-                  <Sparkles className="mx-auto h-9 w-9 text-violet-400" aria-hidden="true" />
-                  <p className="mt-3 text-sm font-semibold text-slate-800">
-                    No AI preview generated yet
-                  </p>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-600">
-                    Select a 1-click preset or fill out the complaint, then click{' '}
-                    <strong>Analyze with Gemini AI</strong> to inspect category, priority, urgency
-                    score, and department routing before submitting.
-                  </p>
-                </div>
-              ) : (
-              <div className="mt-4 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <PriorityBadge priority={analysis.priority} />
-                  <span className="text-xs font-semibold tabular-nums text-slate-600">
-                    AI Confidence: {Math.round(analysis.confidence * 100)}%
-                  </span>
-                </div>
-
-                {/* Urgency Score Meter */}
-                <div>
-                  <div className="flex items-center justify-between text-xs font-semibold">
-                    <span className="text-slate-700">Public Urgency Score</span>
-                    <span className="tabular-nums text-slate-900">{analysis.urgencyScore} / 100</span>
-                  </div>
-                  <div className="mt-1.5 h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
-                    <div
-                      className={`h-full rounded-full transition-all ${
-                        analysis.urgencyScore >= 80
-                          ? 'bg-red-600'
-                          : analysis.urgencyScore >= 60
-                            ? 'bg-amber-500'
-                            : analysis.urgencyScore >= 35
-                              ? 'bg-blue-600'
-                              : 'bg-slate-500'
-                      }`}
-                      style={{ width: `${analysis.urgencyScore}%` }}
-                    />
-                  </div>
-                </div>
-
-                <dl className="space-y-3 rounded-xl border border-slate-100 bg-slate-50 p-3.5 text-xs">
-                  <div>
-                    <dt className="font-semibold uppercase tracking-wide text-slate-600">
-                      Detected Category
-                    </dt>
-                    <dd className="mt-0.5 text-sm font-bold text-slate-900">{analysis.category}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-semibold uppercase tracking-wide text-slate-600">
-                      Recommended Department
-                    </dt>
-                    <dd className="mt-0.5 text-sm font-bold text-blue-900">
-                      {analysis.department}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="font-semibold uppercase tracking-wide text-slate-600">
-                      Target Resolution SLA
-                    </dt>
-                    <dd className="mt-0.5 font-medium text-slate-800">
-                      {analysis.estimatedResolutionSla}
-                    </dd>
-                  </div>
-                </dl>
-
-                <div className="space-y-2.5 text-xs text-slate-700">
-                  <div>
-                    <span className="font-semibold text-slate-900">AI Summary: </span>
-                    {analysis.aiSummary}
-                  </div>
-                  <div>
-                    <span className="font-semibold text-slate-900">Impact Assessment: </span>
-                    {analysis.impactAssessment}
-                  </div>
-                  <div>
-                    <span className="font-semibold text-slate-900">Suggested Crew Action: </span>
-                    {analysis.suggestedAction}
-                  </div>
-                </div>
-
-                {analysis.detectedKeywords.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {analysis.detectedKeywords.map((kw) => (
-                      <span
-                        key={kw}
-                        className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700"
-                      >
-                        #{kw}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-            </div>
-          </div>
-
-          {/* Duplicate Guard */}
-          {duplicates.length > 0 && (
-            <div
-              role="region"
-              aria-label="Potential duplicate complaints"
-              className="rounded-2xl border border-amber-300 bg-amber-50 p-5 shadow-sm"
-            >
-              <div className="flex items-start gap-2.5">
-                <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
-                <div>
-                  <h3 className="text-sm font-bold text-amber-950">
-                    Similar Active Issue Nearby ({duplicates.length})
-                  </h3>
-                  <p className="mt-0.5 text-xs text-amber-900">
-                    Upvote an existing ticket to boost dispatch urgency instead of creating a
-                    duplicate.
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-3 space-y-2">
-                {duplicates.map((dup) => (
-                  <div
-                    key={dup.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-white p-3"
-                  >
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
-                        <span>{dup.id}</span>
-                        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px]">
-                          {dup.status}
-                        </span>
-                      </div>
-                      <p className="truncate text-xs font-medium text-slate-700">{dup.title}</p>
-                      <p className="truncate text-[11px] text-slate-500">{dup.location}</p>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={upvotedDupId === dup.id}
-                      onClick={async () => {
-                        await onUpvoteExisting(dup.id);
-                        setUpvotedDupId(dup.id);
-                      }}
-                      className="focus-ring inline-flex shrink-0 items-center gap-1 rounded-lg border border-amber-300 bg-amber-100 px-2.5 py-1.5 text-xs font-semibold text-amber-950 hover:bg-amber-200 disabled:opacity-60"
-                    >
-                      <ThumbsUp className="h-3.5 w-3.5" aria-hidden="true" />
-                      <span>{upvotedDupId === dup.id ? 'Boosted' : '+1 Boost'}</span>
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </aside>
+        <AiTriagePreviewCard
+          analysis={analysis}
+          duplicates={duplicates}
+          isAnalyzing={isAnalyzing}
+          upvotedDupId={upvotedDupId}
+          onUpvoteDuplicate={async (id) => {
+            await onUpvoteExisting(id);
+            setUpvotedDupId(id);
+          }}
+        />
       </div>
     </div>
   );

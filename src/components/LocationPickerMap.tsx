@@ -28,6 +28,7 @@ export function LocationPickerMap({
   const mapRef = useRef<GoogleMapInstance | null>(null);
   const markerRef = useRef<GoogleMarkerInstance | null>(null);
   const onSelectRef = useRef(onSelectLocation);
+  const latestCoordsRef = useRef(coordinates);
 
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapError, setMapError] = useState(false);
@@ -39,9 +40,10 @@ export function LocationPickerMap({
   }, [onSelectLocation]);
 
   useEffect(() => {
+    latestCoordsRef.current = coordinates;
     setManualLat(String(coordinates.lat));
     setManualLng(String(coordinates.lng));
-  }, [coordinates.lat, coordinates.lng]);
+  }, [coordinates]);
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() || '';
 
@@ -62,7 +64,10 @@ export function LocationPickerMap({
         if (!isMounted || !containerRef.current || !window.google?.maps) return;
 
         if (!mapRef.current) {
-          const initialPos = { lat: coordinates.lat, lng: coordinates.lng };
+          const initialPos = {
+            lat: latestCoordsRef.current.lat,
+            lng: latestCoordsRef.current.lng,
+          };
           const map = new window.google.maps.Map(containerRef.current, {
             center: initialPos,
             zoom: 15,
@@ -124,8 +129,6 @@ export function LocationPickerMap({
         }
       }
     };
-    // Initial mount setup only; external coordinate updates sync via effect below
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey]);
 
   // Sync marker & center when external coordinates change (e.g., Detect My GPS or Presets)
