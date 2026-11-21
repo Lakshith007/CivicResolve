@@ -392,17 +392,15 @@ function extractInlineImagePart(imageBase64?: string): { inlineData: { mimeType:
 }
 
 async function callGeminiEndpoint(
-  model: string,
+  baseUrl: string,
   apiKey: string,
   parts: Array<Record<string, unknown>>
 ): Promise<Record<string, unknown> | null> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 6500);
+  const timer = setTimeout(() => controller.abort(), 8500);
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(
-      apiKey
-    )}`;
+    const url = `${baseUrl}?key=${encodeURIComponent(apiKey)}`;
 
     const res = await fetch(url, {
       method: 'POST',
@@ -483,9 +481,13 @@ JSON Schema:
     parts.push(imagePart);
   }
 
-  const models = ['gemini-2.0-flash', 'gemini-1.5-flash'];
-  for (const model of models) {
-    const parsed = await callGeminiEndpoint(model, apiKey, parts);
+  const endpoints = [
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent',
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent',
+    'https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-flash-lite-latest:generateContent',
+  ];
+  for (const endpoint of endpoints) {
+    const parsed = await callGeminiEndpoint(endpoint, apiKey, parts);
     if (parsed) {
       return normalizeGeminiPayload(parsed, fallback);
     }

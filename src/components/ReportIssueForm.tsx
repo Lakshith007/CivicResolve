@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   AlertCircle,
   Camera,
+  Check,
   CheckCircle2,
   Compass,
+  Copy,
   Loader2,
   MapPin,
   Send,
@@ -22,6 +24,7 @@ import {
   type CivicIssue,
   type IssuePriority,
   type IssueStatus,
+  type SessionUser,
 } from '@/types/civic';
 import { EngineBadge, PriorityBadge } from '@/components/CivicBadges';
 
@@ -35,6 +38,7 @@ interface DuplicateMatch {
 }
 
 interface ReportIssueFormProps {
+  currentUser?: SessionUser | null;
   onIssueCreated: (issue: CivicIssue) => void;
   onSwitchToTrack: (ticketId?: string) => void;
   onUpvoteExisting: (id: string) => Promise<void>;
@@ -110,6 +114,7 @@ function createSamplePngDataUri(label: string, accent: string): string {
 }
 
 export function ReportIssueForm({
+  currentUser,
   onIssueCreated,
   onSwitchToTrack,
   onUpvoteExisting,
@@ -120,7 +125,7 @@ export function ReportIssueForm({
   const [ward, setWard] = useState<string>(WARDS[0]);
   const [coordinates, setCoordinates] = useState({ lat: 12.9716, lng: 77.5946 });
   const [userCategory, setUserCategory] = useState('auto');
-  const [reporterName, setReporterName] = useState('');
+  const [reporterName, setReporterName] = useState(currentUser?.name ?? '');
   const [reporterContact, setReporterContact] = useState('');
   const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
 
@@ -131,7 +136,24 @@ export function ReportIssueForm({
   const [isLocating, setIsLocating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submittedTicket, setSubmittedTicket] = useState<CivicIssue | null>(null);
+  const [copiedId, setCopiedId] = useState(false);
   const [upvotedDupId, setUpvotedDupId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (currentUser?.name && !reporterName.trim()) {
+      setReporterName(currentUser.name);
+    }
+  }, [currentUser, reporterName]);
+
+  const handleCopyTicketId = async (id: string) => {
+    try {
+      await navigator.clipboard.writeText(id);
+      setCopiedId(true);
+      setTimeout(() => setCopiedId(false), 2000);
+    } catch {
+      // Clipboard API unavailable in restricted contexts
+    }
+  };
 
   const applyPreset = (preset: (typeof DEMO_PRESETS)[number]) => {
     setTitle(preset.title);
@@ -328,13 +350,27 @@ export function ReportIssueForm({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => onSwitchToTrack(submittedTicket.id)}
-            className="focus-ring shrink-0 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-800"
-          >
-            Track Live Status
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void handleCopyTicketId(submittedTicket.id)}
+              className="focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-emerald-300 bg-white px-3 py-2 text-xs font-semibold text-emerald-900 transition hover:bg-emerald-100"
+            >
+              {copiedId ? (
+                <Check className="h-3.5 w-3.5 text-emerald-700" aria-hidden="true" />
+              ) : (
+                <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+              <span>{copiedId ? 'Copied!' : 'Copy Ticket ID'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onSwitchToTrack(submittedTicket.id)}
+              className="focus-ring shrink-0 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-800"
+            >
+              Track Live Status
+            </button>
+          </div>
         </div>
       )}
 

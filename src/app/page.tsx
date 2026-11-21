@@ -208,6 +208,7 @@ export default function HomePage() {
           <>
             {activeTab === 'report' && (
               <ReportIssueForm
+                currentUser={currentUser}
                 onIssueCreated={handleIssueCreated}
                 onSwitchToTrack={(ticketId) => {
                   if (ticketId) setHighlightedId(ticketId);
