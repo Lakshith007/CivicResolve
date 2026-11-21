@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   AlertCircle,
@@ -37,6 +37,7 @@ import {
 } from '@/types/civic';
 import { PriorityBadge, StatusBadge } from '@/components/CivicBadges';
 import { AdminHotspotMap } from '@/components/AdminHotspotMap';
+import { compressImageFile } from '@/lib/imageCompress';
 
 export type AdminSection =
   | 'overview'
@@ -168,6 +169,51 @@ export function AdminDashboard({
   const [rejectionReason, setRejectionReason] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
 
+  const modalCloseBtnRef = useRef<HTMLButtonElement | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const wasModalOpenRef = useRef(false);
+
+  const closeTriageModal = () => {
+    setEditingIssue(null);
+    setModalError(null);
+    setRejectingMode(false);
+    setRejectionReason('');
+  };
+
+  useEffect(() => {
+    if (editingIssue) {
+      if (!wasModalOpenRef.current) {
+        previousFocusRef.current = document.activeElement as HTMLElement | null;
+      }
+      wasModalOpenRef.current = true;
+
+      let frame: number | null = null;
+      if (modalFocusHint === 'general') {
+        frame = requestAnimationFrame(() => {
+          modalCloseBtnRef.current?.focus();
+        });
+      }
+
+      const handleKeyDown = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          closeTriageModal();
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => {
+        if (frame !== null) cancelAnimationFrame(frame);
+        window.removeEventListener('keydown', handleKeyDown);
+      };
+    }
+
+    if (wasModalOpenRef.current) {
+      wasModalOpenRef.current = false;
+      previousFocusRef.current?.focus();
+      previousFocusRef.current = null;
+    }
+  }, [editingIssue, modalFocusHint]);
+
   const openTriageModal = (
     issue: CivicIssue,
     focus: 'general' | 'department' | 'priority' = 'general'
@@ -221,7 +267,7 @@ export function AdminDashboard({
           ? `Verified completion photo for ${issue.id} — ticket marked Resolved!`
           : `Sent rework request back to field crew for ${issue.id}.`
       );
-      setEditingIssue(null);
+      closeTriageModal();
     } finally {
       setIsVerifying(false);
     }
@@ -338,25 +384,24 @@ export function AdminDashboard({
     return auditLogs.filter((l) => l.action.includes(auditFilter));
   }, [auditLogs, auditFilter]);
 
-  const handleEvidenceUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleEvidenceUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
       setModalError('Resolution evidence must be a PNG, JPEG, or WebP image.');
       return;
     }
-    if (file.size > 1_400_000) {
-      setModalError('Resolution evidence image must be under 1.4 MB.');
+    if (file.size > 10_000_000) {
+      setModalError('Resolution evidence image must be under 10 MB.');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setResolutionEvidenceUrl(reader.result);
-        setModalError(null);
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressed = await compressImageFile(file);
+      setResolutionEvidenceUrl(compressed);
+      setModalError(null);
+    } catch {
+      setModalError('Unable to process the resolution evidence photo.');
+    }
   };
 
   const handleSaveTriage = async (event: React.FormEvent) => {
@@ -389,7 +434,7 @@ export function AdminDashboard({
       }
 
       setToastMessage(`Updated ${editingIssue.id} → ${status} (${department})`);
-      setEditingIssue(null);
+      closeTriageModal();
     } finally {
       setIsSaving(false);
     }
@@ -798,7 +843,7 @@ export function AdminDashboard({
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search ID, location, keyword, dept..."
                 aria-label="Search complaints"
-                className="w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-xs text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none"
+                className="focus-ring w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-xs text-slate-900 placeholder-slate-500 focus:border-blue-500 focus:bg-white"
               />
             </div>
 
@@ -806,7 +851,7 @@ export function AdminDashboard({
               value={departmentFilter}
               onChange={(e) => setDepartmentFilter(e.target.value as 'All' | Department)}
               aria-label="Filter queue by department"
-              className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none"
+              className="focus-ring rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:border-blue-500 focus:bg-white"
             >
               <option value="All">All Departments</option>
               {DEPARTMENTS.map((dept) => (
@@ -902,7 +947,7 @@ export function AdminDashboard({
                       <span suppressHydrationWarning className="block font-medium">
                         {formatRelativeAge(issue.createdAt)}
                       </span>
-                      <span suppressHydrationWarning className="text-[10px] text-slate-400">
+                      <span suppressHydrationWarning className="text-[10px] text-slate-600">
                         {formatShortDate(issue.createdAt)}
                       </span>
                     </td>
@@ -995,7 +1040,7 @@ export function AdminDashboard({
                 value={auditFilter}
                 onChange={(e) => setAuditFilter(e.target.value)}
                 aria-label="Filter audit logs by action"
-                className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-800"
+                className="focus-ring rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-800"
               >
                 <option value="ALL">All Actions</option>
                 <option value="ADMIN_TRIAGE">Triage &amp; Dispatch Updates</option>
@@ -1405,10 +1450,11 @@ export function AdminDashboard({
                 </p>
               </div>
               <button
+                ref={modalCloseBtnRef}
                 type="button"
-                onClick={() => setEditingIssue(null)}
+                onClick={closeTriageModal}
                 aria-label="Close complaint triage dialog"
-                className="focus-ring rounded-lg p-1 text-slate-500 hover:bg-slate-100"
+                className="focus-ring rounded-lg p-1 text-slate-600 hover:bg-slate-100"
               >
                 <X className="h-5 w-5" aria-hidden="true" />
               </button>
@@ -1512,7 +1558,7 @@ export function AdminDashboard({
                             onClick={() =>
                               handleFieldVerificationDecision(editingIssue, 'approve')
                             }
-                            className="focus-ring inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+                            className="focus-ring inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-800 disabled:opacity-50"
                           >
                             {isVerifying ? (
                               <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
@@ -1545,7 +1591,7 @@ export function AdminDashboard({
                             value={rejectionReason}
                             onChange={(e) => setRejectionReason(e.target.value)}
                             placeholder="e.g. Debris still blocking drainage grating; please clear and re-photograph."
-                            className="w-full rounded-lg border border-red-300 px-3 py-1.5 text-xs text-slate-900 focus:border-red-500 focus:outline-none"
+                            className="focus-ring w-full rounded-lg border border-red-300 px-3 py-1.5 text-xs text-slate-900 focus:border-red-500"
                           />
                           <div className="flex items-center gap-2">
                             <button
@@ -1554,7 +1600,7 @@ export function AdminDashboard({
                               onClick={() =>
                                 handleFieldVerificationDecision(editingIssue, 'reject')
                               }
-                              className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                              className="focus-ring rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
                             >
                               {isVerifying ? 'Sending...' : 'Confirm Reject & Send Back'}
                             </button>
@@ -1564,7 +1610,7 @@ export function AdminDashboard({
                                 setRejectingMode(false);
                                 setRejectionReason('');
                               }}
-                              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                              className="focus-ring rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                             >
                               Cancel
                             </button>
@@ -1600,7 +1646,7 @@ export function AdminDashboard({
                     id="modal-status"
                     value={status}
                     onChange={(e) => setStatus(e.target.value as IssueStatus)}
-                    className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                    className="focus-ring mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500"
                   >
                     {ISSUE_STATUSES.map((s) => {
                       const canResolve =
@@ -1636,7 +1682,7 @@ export function AdminDashboard({
                     autoFocus={modalFocusHint === 'priority'}
                     value={priority}
                     onChange={(e) => setPriority(e.target.value as IssuePriority)}
-                    className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                    className="focus-ring mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500"
                   >
                     {ISSUE_PRIORITIES.map((p) => (
                       <option key={p} value={p}>
@@ -1662,7 +1708,7 @@ export function AdminDashboard({
                     value={priorityOverrideReason}
                     onChange={(e) => setPriorityOverrideReason(e.target.value)}
                     placeholder="Explain why AI priority is being overridden (recorded in immutable audit log)"
-                    className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-amber-500 focus:outline-none"
+                    className="focus-ring mt-1 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-amber-500"
                   />
                 </div>
               )}
@@ -1679,7 +1725,7 @@ export function AdminDashboard({
                   autoFocus={modalFocusHint === 'department'}
                   value={department}
                   onChange={(e) => setDepartment(e.target.value as Department)}
-                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                  className="focus-ring mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500"
                 >
                   {DEPARTMENTS.map((d) => (
                     <option key={d} value={d}>
@@ -1702,19 +1748,23 @@ export function AdminDashboard({
                   value={adminNotes}
                   onChange={(e) => setAdminNotes(e.target.value)}
                   placeholder="Enter crew ID, dispatch details, or field resolution verification..."
-                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                  className="focus-ring mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700">
+                <label
+                  htmlFor="modal-evidence-upload"
+                  className="block text-xs font-semibold text-slate-700"
+                >
                   Resolution Evidence Photo (Optional · PNG/JPEG/WebP)
                 </label>
                 <div className="mt-1 flex items-center gap-3">
-                  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">
+                  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-600 focus-within:ring-offset-2">
                     <Upload className="h-3.5 w-3.5" aria-hidden="true" />
                     <span>Upload Evidence</span>
                     <input
+                      id="modal-evidence-upload"
                       type="file"
                       accept="image/png,image/jpeg,image/webp"
                       onChange={handleEvidenceUpload}
@@ -1732,7 +1782,7 @@ export function AdminDashboard({
               <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-4">
                 <button
                   type="button"
-                  onClick={() => setEditingIssue(null)}
+                  onClick={closeTriageModal}
                   className="focus-ring rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                 >
                   Cancel

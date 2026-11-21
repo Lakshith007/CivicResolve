@@ -70,12 +70,15 @@ export function WorkerAccessGate({ currentUser }: WorkerAccessGateProps) {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12">
+    <main
+      id="main-content"
+      className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12"
+    >
       <section
         aria-labelledby="worker-gate-heading"
         className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
       >
-        <div className="border-b border-slate-100 bg-gradient-to-r from-amber-600 to-orange-600 p-6 text-white">
+        <div className="border-b border-slate-100 bg-gradient-to-r from-amber-700 to-orange-700 p-6 text-white">
           <div className="flex items-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/20 backdrop-blur">
               <HardHat className="h-6 w-6 text-white" aria-hidden="true" />
@@ -84,7 +87,7 @@ export function WorkerAccessGate({ currentUser }: WorkerAccessGateProps) {
               <h1 id="worker-gate-heading" className="text-lg font-extrabold tracking-tight">
                 Field Crew Portal Sign-In
               </h1>
-              <p className="text-xs text-amber-100">
+              <p className="text-xs text-white/95">
                 Authorized Municipal Dispatch Units Only
               </p>
             </div>
@@ -162,7 +165,7 @@ export function WorkerAccessGate({ currentUser }: WorkerAccessGateProps) {
                       setPasscode(crew.passcode);
                       setError(null);
                     }}
-                    className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-amber-400 hover:bg-amber-50 hover:text-amber-900"
+                    className="focus-ring rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-amber-400 hover:bg-amber-50 hover:text-amber-900"
                   >
                     {crew.crewUnitId}
                   </button>
@@ -182,7 +185,7 @@ export function WorkerAccessGate({ currentUser }: WorkerAccessGateProps) {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="focus-ring inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-600 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-700 disabled:opacity-50"
+              className="focus-ring inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-700 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-800 disabled:opacity-50"
             >
               {isSubmitting ? (
                 <>
@@ -201,7 +204,7 @@ export function WorkerAccessGate({ currentUser }: WorkerAccessGateProps) {
           <div className="mt-4 text-center">
             <Link
               href="/"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900"
+              className="focus-ring inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-semibold text-slate-600 hover:text-slate-900"
             >
               <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
               <span>Return to Role Selection</span>

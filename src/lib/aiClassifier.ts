@@ -397,7 +397,7 @@ async function callGeminiEndpoint(
   parts: Array<Record<string, unknown>>
 ): Promise<Record<string, unknown> | null> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8500);
+  const timer = setTimeout(() => controller.abort(), 4000);
 
   try {
     const url = `${baseUrl}?key=${encodeURIComponent(apiKey)}`;
@@ -484,7 +484,6 @@ JSON Schema:
   const endpoints = [
     'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent',
     'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent',
-    'https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-flash-lite-latest:generateContent',
   ];
   for (const endpoint of endpoints) {
     const parsed = await callGeminiEndpoint(endpoint, apiKey, parts);

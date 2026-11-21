@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   AlertCircle,
@@ -138,6 +138,46 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  const proofCloseBtnRef = useRef<HTMLButtonElement | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const wasProofOpenRef = useRef(false);
+
+  const closeSubmitModal = () => {
+    setSubmittingIssue(null);
+    setCompletionNotes('');
+    setCompletionPhotoUrl('');
+    setModalError(null);
+  };
+
+  useEffect(() => {
+    if (submittingIssue) {
+      if (!wasProofOpenRef.current) {
+        previousFocusRef.current = document.activeElement as HTMLElement | null;
+      }
+      wasProofOpenRef.current = true;
+      const frame = requestAnimationFrame(() => {
+        proofCloseBtnRef.current?.focus();
+      });
+      const handleKeyDown = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          closeSubmitModal();
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => {
+        cancelAnimationFrame(frame);
+        window.removeEventListener('keydown', handleKeyDown);
+      };
+    }
+
+    if (wasProofOpenRef.current) {
+      wasProofOpenRef.current = false;
+      previousFocusRef.current?.focus();
+      previousFocusRef.current = null;
+    }
+  }, [submittingIssue]);
+
   const refreshIssues = async () => {
     setIsRefreshing(true);
     try {
@@ -264,7 +304,7 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
       setToastMessage(
         `Proof photo posted for ${submittingIssue.id}! Sent to Municipal Administrator for verification.`
       );
-      setSubmittingIssue(null);
+      closeSubmitModal();
       setActiveTab('pending_review');
     } catch {
       setModalError('Network error while uploading completion proof.');
@@ -279,7 +319,7 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3.5 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-600 text-white shadow-sm">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-700 text-white shadow-sm">
               <HardHat className="h-5 w-5" aria-hidden="true" />
             </div>
             <div>
@@ -291,7 +331,7 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
                   Field Crew Portal
                 </span>
               </div>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-600">
                 Dispatched Work Teams · Upload Completion Proof for Administrator Verification
               </p>
             </div>
@@ -333,7 +373,7 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <main id="main-content" className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
         {toastMessage && (
           <div
             role="status"
@@ -348,7 +388,7 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
               type="button"
               onClick={() => setToastMessage(null)}
               aria-label="Dismiss notification"
-              className="rounded p-1 hover:bg-emerald-100"
+              className="focus-ring rounded p-1 hover:bg-emerald-100"
             >
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -361,7 +401,7 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
             <div>
               <label
                 htmlFor="worker-dept-select"
-                className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500"
+                className="block text-[11px] font-semibold uppercase tracking-wide text-slate-600"
               >
                 Authorized Municipal Division {lockedDepartment ? '(Locked)' : ''}
               </label>
@@ -374,7 +414,7 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
                   id="worker-dept-select"
                   value={selectedDepartment}
                   onChange={(e) => setSelectedDepartment(e.target.value as 'All' | Department)}
-                  className="mt-1 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
+                  className="focus-ring mt-1 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-900 focus:border-blue-500 focus:bg-white"
                 >
                   <option value="All">All Dispatched Divisions</option>
                   {DEPARTMENTS.map((dept) => (
@@ -435,9 +475,17 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
         </section>
 
         {/* Tabs */}
-        <div className="flex flex-wrap gap-2">
+        <div
+          role="tablist"
+          aria-label="Field crew dispatch queues"
+          className="flex flex-wrap gap-2"
+        >
           <button
             type="button"
+            role="tab"
+            id="worker-tab-active"
+            aria-selected={activeTab === 'active'}
+            aria-controls="worker-jobs-panel"
             onClick={() => setActiveTab('active')}
             className={`focus-ring inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold transition ${
               activeTab === 'active'
@@ -450,6 +498,10 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
           </button>
           <button
             type="button"
+            role="tab"
+            id="worker-tab-pending"
+            aria-selected={activeTab === 'pending_review'}
+            aria-controls="worker-jobs-panel"
             onClick={() => setActiveTab('pending_review')}
             className={`focus-ring inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold transition ${
               activeTab === 'pending_review'
@@ -462,6 +514,10 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
           </button>
           <button
             type="button"
+            role="tab"
+            id="worker-tab-completed"
+            aria-selected={activeTab === 'completed'}
+            aria-controls="worker-jobs-panel"
             onClick={() => setActiveTab('completed')}
             className={`focus-ring inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold transition ${
               activeTab === 'completed'
@@ -475,13 +531,24 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
         </div>
 
         {/* Dispatched Job Cards */}
+        <div
+          id="worker-jobs-panel"
+          role="tabpanel"
+          aria-labelledby={
+            activeTab === 'active'
+              ? 'worker-tab-active'
+              : activeTab === 'pending_review'
+              ? 'worker-tab-pending'
+              : 'worker-tab-completed'
+          }
+        >
         {visibleJobs.length === 0 ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center">
             <Landmark className="mx-auto h-8 w-8 text-slate-300" aria-hidden="true" />
             <p className="mt-2 text-sm font-semibold text-slate-700">
               No jobs in this queue right now.
             </p>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-slate-600">
               Tickets appear under Active Dispatches once a Municipal Administrator dispatches them
               (Status: In Progress).
             </p>
@@ -605,7 +672,7 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
                       <button
                         type="button"
                         onClick={() => openSubmitModal(issue)}
-                        className="focus-ring inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-amber-700"
+                        className="focus-ring inline-flex items-center gap-2 rounded-xl bg-amber-700 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-amber-800"
                       >
                         <Camera className="h-4 w-4" aria-hidden="true" />
                         <span>
@@ -623,6 +690,7 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
             })}
           </div>
         )}
+        </div>
       </main>
 
       {/* Post Completed Work Photo Modal */}
@@ -645,13 +713,14 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
                 >
                   Post Completed Work Proof
                 </h2>
-                <p className="text-xs text-slate-500">{submittingIssue.title}</p>
+                <p className="text-xs text-slate-600">{submittingIssue.title}</p>
               </div>
               <button
+                ref={proofCloseBtnRef}
                 type="button"
-                onClick={() => setSubmittingIssue(null)}
+                onClick={closeSubmitModal}
                 aria-label="Close proof upload modal"
-                className="rounded-lg p-1 text-slate-500 hover:bg-slate-100"
+                className="focus-ring rounded-lg p-1 text-slate-600 hover:bg-slate-100"
               >
                 <X className="h-5 w-5" aria-hidden="true" />
               </button>
@@ -676,14 +745,18 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700">
+                <label
+                  htmlFor="worker-proof-photo-input"
+                  className="block text-xs font-semibold text-slate-700"
+                >
                   Completed Work Photo * (PNG, JPEG, or WebP)
                 </label>
                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100">
+                  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-600 focus-within:ring-offset-2">
                     <Upload className="h-3.5 w-3.5" aria-hidden="true" />
                     <span>Upload Photo</span>
                     <input
+                      id="worker-proof-photo-input"
                       type="file"
                       accept="image/png,image/jpeg,image/webp"
                       onChange={handlePhotoUpload}
@@ -699,7 +772,7 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
                         setModalError(null);
                       }
                     }}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800 hover:bg-blue-100"
+                    className="focus-ring inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800 hover:bg-blue-100"
                   >
                     <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
                     <span>Use Sample Proof Photo</span>
@@ -731,7 +804,7 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
                   value={completionNotes}
                   onChange={(e) => setCompletionNotes(e.target.value)}
                   placeholder="Describe the repair completed, parts replaced, and safety verification performed on site..."
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none"
+                  className="focus-ring mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-900 focus:border-blue-500"
                 />
               </div>
 
@@ -744,15 +817,15 @@ export function WorkerPortalClient({ initialIssues, workerUser }: WorkerPortalCl
               <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
                 <button
                   type="button"
-                  onClick={() => setSubmittingIssue(null)}
-                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  onClick={closeSubmitModal}
+                  className="focus-ring rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-amber-700 disabled:opacity-50"
+                  className="focus-ring inline-flex items-center gap-1.5 rounded-xl bg-amber-700 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-amber-800 disabled:opacity-50"
                 >
                   {isSubmitting ? (
                     <>

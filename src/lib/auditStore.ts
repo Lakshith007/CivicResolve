@@ -80,10 +80,6 @@ export function recordAuditLog(params: {
   return cloneLogs([entry])[0];
 }
 
-export function getAuditLogs(limit = 50): AuditLogEntry[] {
-  return loadLogs().slice(0, limit);
-}
-
 export async function hydrateAuditLogsFromFirestore(limit = 50): Promise<AuditLogEntry[]> {
   const local = loadLogs();
   const remote = await fetchAuditLogsFromFirestore();

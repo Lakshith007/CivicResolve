@@ -1,46 +1,20 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
-import { Layers, MapPin, Sparkles } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { MapPin, Sparkles } from 'lucide-react';
 import type { CivicIssue } from '@/types/civic';
+import {
+  loadGoogleMapsScript,
+  subscribeGoogleMapsAuthFailure,
+  type GoogleMapInstance,
+  type GoogleMarkerInstance,
+} from '@/lib/googleMapsLoader';
 
 interface CivicGoogleMapProps {
   issues: CivicIssue[];
   selectedIssueId: string | null;
   onSelectIssue: (id: string) => void;
   includeResolved?: boolean;
-}
-
-declare global {
-  interface Window {
-    google?: any;
-    __googleMapsLoadingPromise?: Promise<void>;
-  }
-}
-
-function loadGoogleMapsScript(apiKey: string): Promise<void> {
-  if (typeof window === 'undefined') return Promise.resolve();
-  if (window.google?.maps) return Promise.resolve();
-  if (window.__googleMapsLoadingPromise) return window.__googleMapsLoadingPromise;
-
-  window.__googleMapsLoadingPromise = new Promise((resolve, reject) => {
-    const existing = document.querySelector('script[src*="maps.googleapis.com"]');
-    if (existing) {
-      existing.addEventListener('load', () => resolve());
-      existing.addEventListener('error', (e) => reject(e));
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly`;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => resolve();
-    script.onerror = (err) => reject(err);
-    document.head.appendChild(script);
-  });
-
-  return window.__googleMapsLoadingPromise;
 }
 
 function getPriorityColor(priority: string): string {
@@ -65,7 +39,10 @@ function createMarkerIcon(priority: string) {
     strokeWeight: 1.5,
     strokeColor: '#ffffff',
     scale: 1.5,
-    anchor: typeof window !== 'undefined' && window.google?.maps?.Point ? new window.google.maps.Point(12, 22) : undefined,
+    anchor:
+      typeof window !== 'undefined' && window.google?.maps?.Point
+        ? new window.google.maps.Point(12, 22)
+        : undefined,
   };
 }
 
@@ -75,12 +52,13 @@ export function CivicGoogleMap({
   onSelectIssue,
   includeResolved = false,
 }: CivicGoogleMapProps) {
-  const activeIssues = includeResolved
-    ? issues
-    : issues.filter((issue) => issue.status !== 'Resolved');
+  const activeIssues = useMemo(
+    () => (includeResolved ? issues : issues.filter((issue) => issue.status !== 'Resolved')),
+    [issues, includeResolved]
+  );
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);
-  const markersRef = useRef<Map<string, any>>(new Map());
+  const mapRef = useRef<GoogleMapInstance | null>(null);
+  const markersRef = useRef<Map<string, GoogleMarkerInstance>>(new Map());
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapError, setMapError] = useState(false);
 
@@ -93,6 +71,10 @@ export function CivicGoogleMap({
       setMapError(true);
       return;
     }
+
+    const unsubscribeAuth = subscribeGoogleMapsAuthFailure(() => {
+      if (isMounted) setMapError(true);
+    });
 
     loadGoogleMapsScript(apiKey)
       .then(() => {
@@ -124,29 +106,32 @@ export function CivicGoogleMap({
 
     return () => {
       isMounted = false;
+      unsubscribeAuth();
     };
   }, [apiKey]);
 
   // Sync Markers with Issues
   useEffect(() => {
-    if (!mapLoaded || !mapRef.current || !window.google?.maps) return;
+    const maps = window.google?.maps;
+    const mapInstance = mapRef.current;
+    if (!mapLoaded || !mapInstance || !maps) return;
 
     // Clear old markers
     markersRef.current.forEach((marker) => marker.setMap(null));
     markersRef.current.clear();
 
-    const bounds = new window.google.maps.LatLngBounds();
+    const bounds = new maps.LatLngBounds();
 
     activeIssues.forEach((issue) => {
       const position = { lat: issue.coordinates.lat, lng: issue.coordinates.lng };
       bounds.extend(position);
 
-      const marker = new window.google.maps.Marker({
+      const marker = new maps.Marker({
         position,
-        map: mapRef.current,
+        map: mapInstance,
         title: `${issue.id}: ${issue.title}`,
         icon: createMarkerIcon(issue.priority),
-        animation: issue.id === selectedIssueId ? window.google.maps.Animation.BOUNCE : undefined,
+        animation: issue.id === selectedIssueId ? maps.Animation?.BOUNCE : undefined,
       });
 
       marker.addListener('click', () => {
@@ -157,7 +142,15 @@ export function CivicGoogleMap({
     });
 
     if (activeIssues.length > 0 && !selectedIssueId) {
-      mapRef.current.fitBounds(bounds);
+      if (activeIssues.length === 1) {
+        mapInstance.panTo({
+          lat: activeIssues[0].coordinates.lat,
+          lng: activeIssues[0].coordinates.lng,
+        });
+        mapInstance.setZoom(14);
+      } else {
+        mapInstance.fitBounds(bounds);
+      }
     }
   }, [activeIssues, mapLoaded, onSelectIssue, selectedIssueId]);
 
@@ -175,7 +168,7 @@ export function CivicGoogleMap({
 
       markersRef.current.forEach((m, id) => {
         if (id === selectedIssueId) {
-          m.setAnimation(window.google.maps.Animation.BOUNCE);
+          m.setAnimation(window.google?.maps?.Animation?.BOUNCE);
           setTimeout(() => m.setAnimation(null), 1500);
         } else {
           m.setAnimation(null);
@@ -197,9 +190,9 @@ export function CivicGoogleMap({
       {mapError && (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-900/90 p-4 text-center text-xs text-slate-300">
           <div>
-            <MapPin className="mx-auto mb-1 h-5 w-5 text-amber-400" />
+            <MapPin className="mx-auto mb-1 h-5 w-5 text-amber-400" aria-hidden="true" />
             <p className="font-semibold text-white">Interactive Spatial Grid Active</p>
-            <p className="mt-0.5 text-slate-400">Displaying coordinate pins on city ward grid.</p>
+            <p className="mt-0.5 text-slate-300">Displaying coordinate pins on city ward grid.</p>
           </div>
         </div>
       )}

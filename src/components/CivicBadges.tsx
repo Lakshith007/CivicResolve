@@ -108,8 +108,8 @@ export function ResolutionTimeline({
               <div
                 className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                   completed
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'border border-slate-300 bg-white text-slate-400'
+                    ? 'bg-blue-700 text-white shadow-sm'
+                    : 'border border-slate-300 bg-white text-slate-600'
                 }`}
               >
                 {index < activeIdx || currentStatus === 'Resolved' ? (
@@ -120,7 +120,7 @@ export function ResolutionTimeline({
               </div>
               <span
                 className={`text-xs font-semibold ${
-                  completed ? 'text-slate-900' : 'text-slate-400'
+                  completed ? 'text-slate-900' : 'text-slate-600'
                 }`}
               >
                 {step}
@@ -146,8 +146,8 @@ export function ResolutionTimeline({
             />
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
               <span className="font-semibold text-slate-800">{entry.status}</span>
-              <span className="text-slate-500">• {entry.updatedBy}</span>
-              <time suppressHydrationWarning className="text-slate-400" dateTime={entry.timestamp}>
+              <span className="text-slate-600">• {entry.updatedBy}</span>
+              <time suppressHydrationWarning className="text-slate-600" dateTime={entry.timestamp}>
                 {new Intl.DateTimeFormat('en-IN', {
                   month: 'short',
                   day: 'numeric',

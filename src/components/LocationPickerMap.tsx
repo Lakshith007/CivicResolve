@@ -2,6 +2,13 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Loader2, MapPin, Navigation } from 'lucide-react';
+import {
+  loadGoogleMapsScript,
+  subscribeGoogleMapsAuthFailure,
+  type GoogleMapInstance,
+  type GoogleMapsMouseEvent,
+  type GoogleMarkerInstance,
+} from '@/lib/googleMapsLoader';
 
 interface Coordinates {
   lat: number;
@@ -13,45 +20,13 @@ interface LocationPickerMapProps {
   onSelectLocation: (coords: Coordinates) => void;
 }
 
-declare global {
-  interface Window {
-    google?: any;
-    __googleMapsLoadingPromise?: Promise<void>;
-  }
-}
-
-function loadGoogleMapsScript(apiKey: string): Promise<void> {
-  if (typeof window === 'undefined') return Promise.resolve();
-  if (window.google?.maps) return Promise.resolve();
-  if (window.__googleMapsLoadingPromise) return window.__googleMapsLoadingPromise;
-
-  window.__googleMapsLoadingPromise = new Promise((resolve, reject) => {
-    const existing = document.querySelector('script[src*="maps.googleapis.com"]');
-    if (existing) {
-      existing.addEventListener('load', () => resolve());
-      existing.addEventListener('error', (e) => reject(e));
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly`;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => resolve();
-    script.onerror = (err) => reject(err);
-    document.head.appendChild(script);
-  });
-
-  return window.__googleMapsLoadingPromise;
-}
-
 export function LocationPickerMap({
   coordinates,
   onSelectLocation,
 }: LocationPickerMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);
-  const markerRef = useRef<any>(null);
+  const mapRef = useRef<GoogleMapInstance | null>(null);
+  const markerRef = useRef<GoogleMarkerInstance | null>(null);
   const onSelectRef = useRef(onSelectLocation);
 
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -78,6 +53,10 @@ export function LocationPickerMap({
       return;
     }
 
+    const unsubscribeAuth = subscribeGoogleMapsAuthFailure(() => {
+      if (isMounted) setMapError(true);
+    });
+
     loadGoogleMapsScript(apiKey)
       .then(() => {
         if (!isMounted || !containerRef.current || !window.google?.maps) return;
@@ -102,7 +81,7 @@ export function LocationPickerMap({
             animation: window.google.maps.Animation?.DROP,
           });
 
-          map.addListener('click', (e: any) => {
+          map.addListener('click', (e: GoogleMapsMouseEvent) => {
             if (!e?.latLng) return;
             const lat = Number(e.latLng.lat().toFixed(5));
             const lng = Number(e.latLng.lng().toFixed(5));
@@ -110,7 +89,7 @@ export function LocationPickerMap({
             onSelectRef.current({ lat, lng });
           });
 
-          marker.addListener('dragend', (e: any) => {
+          marker.addListener('dragend', (e: GoogleMapsMouseEvent) => {
             if (!e?.latLng) return;
             const lat = Number(e.latLng.lat().toFixed(5));
             const lng = Number(e.latLng.lng().toFixed(5));
@@ -132,6 +111,7 @@ export function LocationPickerMap({
 
     return () => {
       isMounted = false;
+      unsubscribeAuth();
       if (window.google?.maps?.event) {
         if (markerRef.current) {
           window.google.maps.event.clearInstanceListeners(markerRef.current);

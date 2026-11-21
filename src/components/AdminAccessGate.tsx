@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, KeyRound, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, KeyRound, ShieldAlert } from 'lucide-react';
 import { AdminAuthModal } from '@/components/AdminAuthModal';
 import type { SessionUser } from '@/types/civic';
 

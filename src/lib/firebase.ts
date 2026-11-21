@@ -8,20 +8,22 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 import type { AuditLogEntry, CivicIssue } from '@/types/civic';
+import {
+  firebaseConfig,
+  initAnalytics,
+  isFirebaseConfigured,
+} from '@/lib/firebaseClient';
 
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim() || '',
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN?.trim() || '',
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.trim() || '',
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET?.trim() || '',
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID?.trim() || '',
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID?.trim() || '',
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID?.trim() || '',
+export { initAnalytics, isFirebaseConfigured };
+
+const ISSUES_CACHE_TTL_MS = 3000;
+
+const globalForFirestoreCache = globalThis as unknown as {
+  __civicFirestoreIssuesCache?: { data: CivicIssue[]; expiresAt: number } | null;
 };
 
-export function isFirebaseConfigured(): boolean {
-  if (process.env.NODE_ENV === 'test') return false;
-  return Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
+export function invalidateFirestoreIssuesCache(): void {
+  globalForFirestoreCache.__civicFirestoreIssuesCache = null;
 }
 
 export function getFirebaseApp(): FirebaseApp | null {
@@ -52,25 +54,6 @@ function withTimeout<T>(promise: Promise<T>, ms = 4000): Promise<T> {
   ]);
 }
 
-/**
- * Initializes Firebase Analytics on the client side if supported by the browser environment.
- */
-export async function initAnalytics() {
-  if (typeof window === 'undefined' || !isFirebaseConfigured()) return null;
-  try {
-    const app = getFirebaseApp();
-    if (!app) return null;
-    const { getAnalytics, isSupported } = await import('firebase/analytics');
-    const supported = await isSupported();
-    if (supported) {
-      return getAnalytics(app);
-    }
-  } catch {
-    // Analytics unavailable in testing or unsupported environments
-  }
-  return null;
-}
-
 function removeUndefinedFields<T extends Record<string, unknown>>(obj: T): Record<string, unknown> {
   const cleaned: Record<string, unknown> = {};
   for (const [key, val] of Object.entries(obj)) {
@@ -90,6 +73,7 @@ function removeUndefinedFields<T extends Record<string, unknown>>(obj: T): Recor
  * Uses setDoc with merge: true so both new and seeded issues persist cleanly across serverless containers.
  */
 export async function syncIssueToFirestore(issue: CivicIssue): Promise<boolean> {
+  invalidateFirestoreIssuesCache();
   try {
     const db = getFirebaseDb();
     if (!db) return false;
@@ -99,6 +83,7 @@ export async function syncIssueToFirestore(issue: CivicIssue): Promise<boolean> 
       syncedAt: new Date().toISOString(),
     } as unknown as Record<string, unknown>);
     await withTimeout(setDoc(issueRef, cleaned, { merge: true }));
+    invalidateFirestoreIssuesCache();
     return true;
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
@@ -108,40 +93,28 @@ export async function syncIssueToFirestore(issue: CivicIssue): Promise<boolean> 
 }
 
 /**
- * Persists an issue update (status, triage, upvotes, or field verification) to Firestore.
- */
-export async function syncStatusUpdateToFirestore(
-  ticketId: string,
-  updateData: Partial<CivicIssue>
-): Promise<boolean> {
-  try {
-    const db = getFirebaseDb();
-    if (!db) return false;
-    const issueRef = doc(db, 'civic_issues', ticketId);
-    const cleaned = removeUndefinedFields({
-      ...updateData,
-      id: ticketId,
-      updatedAt: updateData.updatedAt || new Date().toISOString(),
-    } as unknown as Record<string, unknown>);
-    await withTimeout(setDoc(issueRef, cleaned, { merge: true }));
-    return true;
-  } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    console.warn(`[Firebase Firestore Update] Notice for ${ticketId}: ${errorMsg}`);
-    return false;
-  }
-}
-
-/**
- * Fetches all issues stored in Firestore across serverless containers.
+ * Fetches all issues stored in Firestore across serverless containers,
+ * using a short 3s TTL read cache that clears immediately on writes.
  */
 export async function fetchIssuesFromFirestore(): Promise<CivicIssue[] | null> {
+  if (!isFirebaseConfigured()) return null;
+  const cached = globalForFirestoreCache.__civicFirestoreIssuesCache;
+  if (cached && cached.expiresAt > Date.now()) {
+    return [...cached.data];
+  }
+
   try {
     const db = getFirebaseDb();
     if (!db) return null;
     const snap = await withTimeout(getDocs(collection(db, 'civic_issues')));
-    if (snap.empty) return [];
-    return snap.docs.map((d) => d.data() as CivicIssue).filter((i) => Boolean(i?.id && i?.title));
+    const issues = snap.empty
+      ? []
+      : snap.docs.map((d) => d.data() as CivicIssue).filter((i) => Boolean(i?.id && i?.title));
+    globalForFirestoreCache.__civicFirestoreIssuesCache = {
+      data: issues,
+      expiresAt: Date.now() + ISSUES_CACHE_TTL_MS,
+    };
+    return [...issues];
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     console.warn(`[Firebase Firestore Fetch] Notice: ${errorMsg}`);

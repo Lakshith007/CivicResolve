@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { SESSION_COOKIE_NAME, verifySessionToken } from '@/lib/authStore';
-import type { SessionUser } from '@/types/civic';
+import type { SessionUser, UserRole } from '@/types/civic';
 
 type GuardSuccess = { ok: true; user: SessionUser; token: string };
 type GuardFailure = { ok: false; response: NextResponse };
@@ -58,49 +58,44 @@ export function requireAuth(request?: Request): GuardResult {
   return { ok: true, user, token };
 }
 
-export function requireCitizen(request?: Request): GuardResult {
+function requireRoles(
+  allowedRoles: readonly UserRole[],
+  forbiddenMessage: string,
+  request?: Request
+): GuardResult {
   const auth = requireAuth(request);
   if (!auth.ok) return auth;
-  if (auth.user.role !== 'CITIZEN' && auth.user.role !== 'ADMIN') {
+  if (!allowedRoles.includes(auth.user.role)) {
     return {
       ok: false,
-      response: NextResponse.json(
-        { error: 'Forbidden: valid citizen or administrator role required.' },
-        { status: 403 }
-      ),
+      response: NextResponse.json({ error: forbiddenMessage }, { status: 403 }),
     };
   }
   return auth;
+}
+
+export function requireCitizen(request?: Request): GuardResult {
+  return requireRoles(
+    ['CITIZEN', 'ADMIN'],
+    'Forbidden: valid citizen or administrator role required.',
+    request
+  );
 }
 
 export function requireAdmin(request?: Request): GuardResult {
-  const auth = requireAuth(request);
-  if (!auth.ok) return auth;
-  if (auth.user.role !== 'ADMIN') {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        { error: 'Forbidden: Administrator privileges are required for this operation.' },
-        { status: 403 }
-      ),
-    };
-  }
-  return auth;
+  return requireRoles(
+    ['ADMIN'],
+    'Forbidden: Administrator privileges are required for this operation.',
+    request
+  );
 }
 
 export function requireWorker(request?: Request): GuardResult {
-  const auth = requireAuth(request);
-  if (!auth.ok) return auth;
-  if (auth.user.role !== 'WORKER' && auth.user.role !== 'ADMIN') {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        { error: 'Forbidden: Authorized municipal field crew credentials are required.' },
-        { status: 403 }
-      ),
-    };
-  }
-  return auth;
+  return requireRoles(
+    ['WORKER', 'ADMIN'],
+    'Forbidden: Authorized municipal field crew credentials are required.',
+    request
+  );
 }
 
 /**

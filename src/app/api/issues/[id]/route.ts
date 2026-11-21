@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { recordAuditLog } from '@/lib/auditStore';
 import {
   authenticateUser,
+  checkRateLimit,
+  getClientIp,
   requireAdmin,
   requireAuth,
   verifySameOrigin,
@@ -75,6 +77,15 @@ export async function PATCH(
         'verificationDecision' in body);
 
     if (body?.action === 'upvote' && !hasAdminFields) {
+      const ip = getClientIp(request);
+      const rl = checkRateLimit(`upvote:${ip}`, 30, 5 * 60 * 1000);
+      if (!rl.allowed) {
+        return NextResponse.json(
+          { error: 'Too many upvote requests. Please wait before retrying.' },
+          { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } }
+        );
+      }
+
       await hydrateIssuesFromFirestore();
       const updated = upvoteIssue(context.params.id);
       if (!updated) {

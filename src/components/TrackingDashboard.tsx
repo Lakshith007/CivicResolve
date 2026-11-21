@@ -120,7 +120,7 @@ export function TrackingDashboard({
       {/* Live KPI Strip */}
       <section aria-label="Civic metrics summary" className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
             Active Open Issues
           </p>
           <p className="mt-1 text-2xl font-extrabold text-slate-900">
@@ -171,6 +171,7 @@ export function TrackingDashboard({
                 <div className="flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-xs">
                   <button
                     type="button"
+                    aria-pressed={mapMode === 'google'}
                     onClick={() => setMapMode('google')}
                     className={`focus-ring rounded px-2 py-0.5 text-[11px] font-semibold transition ${
                       mapMode === 'google'
@@ -182,6 +183,7 @@ export function TrackingDashboard({
                   </button>
                   <button
                     type="button"
+                    aria-pressed={mapMode === 'grid'}
                     onClick={() => setMapMode('grid')}
                     className={`focus-ring rounded px-2 py-0.5 text-[11px] font-semibold transition ${
                       mapMode === 'grid'
@@ -193,7 +195,7 @@ export function TrackingDashboard({
                   </button>
                 </div>
               </div>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-600">
                 Click any pin to inspect issue details and department assignment.
               </p>
             </div>
@@ -346,6 +348,7 @@ export function TrackingDashboard({
           {currentUser && (
             <button
               type="button"
+              aria-pressed={onlyMine}
               onClick={() => setOnlyMine((prev) => !prev)}
               className={`focus-ring rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                 onlyMine
@@ -360,6 +363,7 @@ export function TrackingDashboard({
             <button
               key={status}
               type="button"
+              aria-pressed={statusFilter === status}
               onClick={() => setStatusFilter(status)}
               className={`focus-ring rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                 statusFilter === status
@@ -409,6 +413,11 @@ export function TrackingDashboard({
 
       {/* Issues List */}
       <section aria-label="Civic issue tickets" className="space-y-4">
+        <p aria-live="polite" className="text-xs font-medium text-slate-600">
+          Showing {filteredIssues.length} of {issues.length} civic issue
+          {issues.length === 1 ? '' : 's'}
+          {statusFilter !== 'All' ? ` (${statusFilter})` : ''}
+        </p>
         {filteredIssues.length === 0 ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-600">
             No civic complaints match your search criteria. Try clearing filters.
@@ -485,7 +494,7 @@ export function TrackingDashboard({
                 {isExpanded && (
                   <div className="mt-4 grid gap-5 border-t border-slate-100 pt-4 lg:grid-cols-12">
                     <div className="lg:col-span-7">
-                      <h4 className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">
+                      <h4 className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-600">
                         Resolution Progress Timeline
                       </h4>
                       <ResolutionTimeline

@@ -613,49 +613,51 @@ export function ReportIssueForm({
             )}
 
             {/* Live GPS Verification Strip */}
-            {gpsStatus === 'locating' && (
-              <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-900">
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-700" aria-hidden="true" />
-                <span>{gpsMessage}</span>
-              </div>
-            )}
-
-            {gpsStatus === 'locked' && (
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-950">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
-                    <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
-                    GPS Locked{gpsAccuracy ? ` (±${gpsAccuracy}m)` : ''}
-                  </span>
-                  <span className="font-medium">{gpsMessage}</span>
-                  <span className="rounded bg-white px-2 py-0.5 font-mono text-[11px] text-slate-700 ring-1 ring-emerald-200">
-                    {coordinates.lat}, {coordinates.lng}
-                  </span>
+            <div aria-live="polite" className="space-y-2">
+              {gpsStatus === 'locating' && (
+                <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-900">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-700" aria-hidden="true" />
+                  <span>{gpsMessage}</span>
                 </div>
-                <a
-                  href={`https://www.google.com/maps?q=${coordinates.lat},${coordinates.lng}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 font-semibold text-blue-700 hover:underline"
-                >
-                  <span>Verify Pin on Maps</span>
-                  <ExternalLink className="h-3 w-3" aria-hidden="true" />
-                </a>
-              </div>
-            )}
+              )}
 
-            {gpsStatus === 'error' && (
-              <div
-                role="alert"
-                className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950"
-              >
-                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700" aria-hidden="true" />
-                <span>{gpsMessage}</span>
-              </div>
-            )}
+              {gpsStatus === 'locked' && (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-950">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-700 px-2 py-0.5 text-[10px] font-bold text-white">
+                      <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+                      GPS Locked{gpsAccuracy ? ` (±${gpsAccuracy}m)` : ''}
+                    </span>
+                    <span className="font-medium">{gpsMessage}</span>
+                    <span className="rounded bg-white px-2 py-0.5 font-mono text-[11px] text-slate-700 ring-1 ring-emerald-200">
+                      {coordinates.lat}, {coordinates.lng}
+                    </span>
+                  </div>
+                  <a
+                    href={`https://www.google.com/maps?q=${coordinates.lat},${coordinates.lng}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="focus-ring inline-flex items-center gap-1 rounded font-semibold text-blue-700 hover:underline"
+                  >
+                    <span>Verify Pin on Maps</span>
+                    <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                  </a>
+                </div>
+              )}
+
+              {gpsStatus === 'error' && (
+                <div
+                  role="alert"
+                  className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950"
+                >
+                  <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700" aria-hidden="true" />
+                  <span>{gpsMessage}</span>
+                </div>
+              )}
+            </div>
 
             {gpsStatus === 'idle' && (
-              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600">
                 <span>
                   Coordinates: <strong className="font-mono text-slate-700">{coordinates.lat}, {coordinates.lng}</strong>
                   {ward !== 'Auto-Detected Municipal Zone' ? ` · Zone: ${ward}` : ''}
@@ -716,14 +718,18 @@ export function ReportIssueForm({
 
           {/* Photo Attachment */}
           <div>
-            <span className="block text-sm font-semibold text-slate-800">
+            <label htmlFor="issue-photo-upload" className="block text-sm font-semibold text-slate-800">
               Evidence Photo (Optional)
-            </span>
+            </label>
             <div className="mt-1.5 flex flex-wrap items-center gap-3">
-              <label className="focus-ring inline-flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-2.5 text-xs font-semibold text-slate-700 transition hover:border-blue-400 hover:bg-blue-50">
+              <label
+                htmlFor="issue-photo-upload"
+                className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-2.5 text-xs font-semibold text-slate-700 transition hover:border-blue-400 hover:bg-blue-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-600 focus-within:ring-offset-2"
+              >
                 <Upload className="h-4 w-4 text-blue-600" aria-hidden="true" />
                 <span>Upload Photo</span>
                 <input
+                  id="issue-photo-upload"
                   type="file"
                   accept="image/png,image/jpeg,image/webp"
                   onChange={handleFileUpload}
@@ -803,25 +809,29 @@ export function ReportIssueForm({
                 </div>
                 <div>
                   <h2 className="text-base font-bold text-slate-900">AI Triage Preview</h2>
-                  <p className="text-xs text-slate-500">Powered by Google Gemini</p>
+                  <p className="text-xs text-slate-600">Powered by Google Gemini</p>
                 </div>
               </div>
               {analysis && <EngineBadge engine={analysis.engine} />}
             </div>
 
-            {!analysis ? (
-              <div className="py-10 text-center">
-                <Sparkles className="mx-auto h-10 w-10 text-slate-300" aria-hidden="true" />
-                <p className="mt-3 text-sm font-medium text-slate-700">
-                  No AI preview generated yet
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Select a 1-click preset or fill out the complaint, then click{' '}
-                  <strong>Analyze with Gemini AI</strong> to inspect category, priority, urgency
-                  score, and department routing before submitting.
-                </p>
-              </div>
-            ) : (
+            <div aria-live="polite">
+              {isAnalyzing && (
+                <p className="sr-only">Analyzing civic issue details with Gemini AI...</p>
+              )}
+              {!analysis ? (
+                <div className="py-10 text-center">
+                  <Sparkles className="mx-auto h-10 w-10 text-slate-400" aria-hidden="true" />
+                  <p className="mt-3 text-sm font-medium text-slate-700">
+                    No AI preview generated yet
+                  </p>
+                  <p className="mt-1 text-xs text-slate-600">
+                    Select a 1-click preset or fill out the complaint, then click{' '}
+                    <strong>Analyze with Gemini AI</strong> to inspect category, priority, urgency
+                    score, and department routing before submitting.
+                  </p>
+                </div>
+              ) : (
               <div className="mt-4 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <PriorityBadge priority={analysis.priority} />
@@ -854,13 +864,13 @@ export function ReportIssueForm({
 
                 <dl className="space-y-3 rounded-xl border border-slate-100 bg-slate-50 p-3.5 text-xs">
                   <div>
-                    <dt className="font-semibold uppercase tracking-wide text-slate-500">
+                    <dt className="font-semibold uppercase tracking-wide text-slate-600">
                       Detected Category
                     </dt>
                     <dd className="mt-0.5 text-sm font-bold text-slate-900">{analysis.category}</dd>
                   </div>
                   <div>
-                    <dt className="font-semibold uppercase tracking-wide text-slate-500">
+                    <dt className="font-semibold uppercase tracking-wide text-slate-600">
                       Recommended Department
                     </dt>
                     <dd className="mt-0.5 text-sm font-bold text-blue-900">
@@ -868,7 +878,7 @@ export function ReportIssueForm({
                     </dd>
                   </div>
                   <div>
-                    <dt className="font-semibold uppercase tracking-wide text-slate-500">
+                    <dt className="font-semibold uppercase tracking-wide text-slate-600">
                       Target Resolution SLA
                     </dt>
                     <dd className="mt-0.5 font-medium text-slate-800">
@@ -906,6 +916,7 @@ export function ReportIssueForm({
                 )}
               </div>
             )}
+            </div>
           </div>
 
           {/* Duplicate Guard */}

@@ -18,7 +18,7 @@ import {
   User,
 } from 'lucide-react';
 import type { CivicIssue, DashboardStats, SessionUser } from '@/types/civic';
-import { initAnalytics } from '@/lib/firebase';
+import { initAnalytics } from '@/lib/firebaseClient';
 import { ReportIssueForm } from '@/components/ReportIssueForm';
 import { TrackingDashboard } from '@/components/TrackingDashboard';
 import { AdminAuthModal } from '@/components/AdminAuthModal';
@@ -132,58 +132,66 @@ export default function HomePage() {
           </button>
 
           {/* Center Navigation Links */}
-          <nav
-            role="tablist"
-            aria-label="CivicResolve navigation views"
-            className="flex items-center gap-1 sm:gap-2"
-          >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'home'}
-              onClick={() => setActiveTab('home')}
-              className={`focus-ring inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition sm:text-sm ${
-                activeTab === 'home'
-                  ? 'text-blue-700 bg-blue-50/80'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-              }`}
+          <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+            <nav
+              role="tablist"
+              aria-label="CivicResolve navigation views"
+              className="flex items-center gap-1 sm:gap-2"
             >
-              <Home className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>Home</span>
-            </button>
+              <button
+                type="button"
+                role="tab"
+                id="nav-tab-home"
+                aria-selected={activeTab === 'home'}
+                aria-controls="main-content"
+                onClick={() => setActiveTab('home')}
+                className={`focus-ring inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition sm:text-sm ${
+                  activeTab === 'home'
+                    ? 'text-blue-700 bg-blue-50/80'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <Home className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Home</span>
+              </button>
 
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'track'}
-              onClick={() => setActiveTab('track')}
-              className={`focus-ring inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition sm:text-sm ${
-                activeTab === 'track'
-                  ? 'text-blue-700 bg-blue-50/80'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-              }`}
-            >
-              <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>
-                Map &amp; Track
-                {!isLoading ? ` (${stats.reported + stats.inProgress})` : ''}
-              </span>
-            </button>
+              <button
+                type="button"
+                role="tab"
+                id="nav-tab-track"
+                aria-selected={activeTab === 'track'}
+                aria-controls="main-content"
+                onClick={() => setActiveTab('track')}
+                className={`focus-ring inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition sm:text-sm ${
+                  activeTab === 'track'
+                    ? 'text-blue-700 bg-blue-50/80'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>
+                  Map &amp; Track
+                  {!isLoading ? ` (${stats.reported + stats.inProgress})` : ''}
+                </span>
+              </button>
 
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'report'}
-              onClick={() => setActiveTab('report')}
-              className={`focus-ring inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition sm:text-sm ${
-                activeTab === 'report'
-                  ? 'text-blue-700 bg-blue-50/80'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-              }`}
-            >
-              <FilePlus2 className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>Report Issue</span>
-            </button>
+              <button
+                type="button"
+                role="tab"
+                id="nav-tab-report"
+                aria-selected={activeTab === 'report'}
+                aria-controls="main-content"
+                onClick={() => setActiveTab('report')}
+                className={`focus-ring inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition sm:text-sm ${
+                  activeTab === 'report'
+                    ? 'text-blue-700 bg-blue-50/80'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <FilePlus2 className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Report Issue</span>
+              </button>
+            </nav>
 
             <Link
               href="/worker"
@@ -192,7 +200,7 @@ export default function HomePage() {
               <HardHat className="h-3.5 w-3.5 text-amber-600" aria-hidden="true" />
               <span>Field Crew</span>
             </Link>
-          </nav>
+          </div>
 
           {/* Right Admin Control */}
           <div className="flex items-center gap-2">
@@ -231,7 +239,12 @@ export default function HomePage() {
 
       {/* Role-Selection Landing View */}
       {activeTab === 'home' ? (
-        <main className="flex flex-1 flex-col items-center justify-center bg-gradient-to-b from-white via-slate-50/60 to-slate-100/70 px-4 py-14 sm:px-6 lg:px-8">
+        <main
+          id="main-content"
+          role="tabpanel"
+          aria-labelledby="nav-tab-home"
+          className="flex flex-1 flex-col items-center justify-center bg-gradient-to-b from-white via-slate-50/60 to-slate-100/70 px-4 py-14 sm:px-6 lg:px-8"
+        >
           <div className="w-full max-w-6xl text-center">
             <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
               Welcome to{' '}
@@ -311,12 +324,12 @@ export default function HomePage() {
                 <div className="mt-6 space-y-2.5">
                   <Link
                     href="/worker"
-                    className="focus-ring inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-700"
+                    className="focus-ring inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-800"
                   >
                     <span>Open Crew Portal</span>
                     <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
                   </Link>
-                  <p className="text-center text-[11px] text-slate-500">
+                  <p className="text-center text-[11px] text-slate-600">
                     {stats.inProgress} active dispatch{stats.inProgress === 1 ? '' : 'es'} in progress
                   </p>
                 </div>
@@ -355,14 +368,14 @@ export default function HomePage() {
                     </span>
                     <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
                   </button>
-                  <p className="text-center text-[11px] text-slate-500">
+                  <p className="text-center text-[11px] text-slate-600">
                     Protected by municipal RBAC &amp; immutable audit logging
                   </p>
                 </div>
               </div>
             </div>
 
-            <p className="mt-8 text-xs font-medium text-slate-500">
+            <p className="mt-8 text-xs font-medium text-slate-600">
               Select your role to continue
             </p>
           </div>
@@ -385,7 +398,17 @@ export default function HomePage() {
             </div>
           </div>
 
-          <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
+          <main
+            id="main-content"
+            role="tabpanel"
+            aria-labelledby={activeTab === 'report' ? 'nav-tab-report' : 'nav-tab-track'}
+            className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8"
+          >
+            <h1 className="sr-only">
+              {activeTab === 'report'
+                ? 'Report a Civic Issue'
+                : 'Citywide Issue Map & Live Resolution Tracker'}
+            </h1>
             {isLoading && issues.length === 0 ? (
               <div className="flex items-center justify-center py-24 text-slate-600">
                 <Loader2 className="mr-2 h-5 w-5 animate-spin text-blue-700" aria-hidden="true" />

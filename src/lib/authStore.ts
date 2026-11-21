@@ -341,24 +341,6 @@ export function updateUserName(userId: string, name: string): SessionUser | null
   return toSessionUser(users[idx]);
 }
 
-/**
- * Trusted server-only privilege grant: only an existing verified ADMIN may promote another user.
- */
-export function grantAdminRole(
-  targetUserId: string,
-  actingAdmin: SessionUser
-): SessionUser | null {
-  if (actingAdmin.role !== 'ADMIN') {
-    throw new Error('Forbidden: only administrators can grant administrative privileges.');
-  }
-  const users = loadUsers();
-  const idx = users.findIndex((u) => u.id === targetUserId);
-  if (idx === -1) return null;
-  users[idx] = { ...users[idx], role: 'ADMIN' };
-  persistUsers(users);
-  return toSessionUser(users[idx]);
-}
-
 interface TokenPayload {
   sid: string;
   uid: string;

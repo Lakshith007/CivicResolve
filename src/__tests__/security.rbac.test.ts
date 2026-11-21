@@ -676,4 +676,331 @@ describe('CivicResolve RBAC & Application Security Verification', () => {
     const analyticsJson = await analyticsRes.json();
     expect(analyticsJson.auditLogs[0].action).toBe('ADMIN_VERIFY_AND_RESOLVE');
   });
+
+  it('blocks Field Crew from re-uploading the citizen original before-photo on the same ticket (SHA-256 plagiarism guard)', async () => {
+    const beforePhotoPng =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+    // Citizen reports an Electrical issue with an original Before photo
+    const createRes = await issuesPost(
+      makeJsonRequest('http://localhost/api/issues', 'POST', {
+        title: 'Sparking streetlight junction box near college',
+        description: 'Exposed electrical cable sparking outside campus main gate.',
+        location: 'Avinashi Road, Peelamedu',
+        imageUrl: beforePhotoPng,
+      })
+    );
+    expect(createRes.status).toBe(201);
+    const { issue: created } = await createRes.json();
+    expect(created.department).toBe('Electrical & Streetlighting Division');
+
+    // Admin dispatches ticket to In Progress
+    const adminLoginRes = await loginPost(
+      makeJsonRequest('http://localhost/api/auth/login', 'POST', {
+        email: 'admin@civicresolve.gov',
+        password: 'TestAdmin#2026!Secure',
+      })
+    );
+    const adminCookie = extractCookieValue(adminLoginRes, SESSION_COOKIE_NAME);
+    const dispatchRes = await issueByIdPatch(
+      makeJsonRequest(
+        `http://localhost/api/issues/${created.id}`,
+        'PATCH',
+        { status: 'In Progress', adminNotes: 'Dispatched CREW-E4.' },
+        adminCookie
+      ),
+      { params: { id: created.id } }
+    );
+    expect(dispatchRes.status).toBe(200);
+
+    // Worker signs in and tries to submit the citizen's Before photo as completion proof
+    const workerLoginRes = await workerLoginPost(
+      makeJsonRequest('http://localhost/api/auth/worker-login', 'POST', {
+        crewUnitId: 'CREW-E4',
+        passcode: 'Crew@E4!2026',
+      })
+    );
+    expect(workerLoginRes.status).toBe(200);
+    const workerCookie = extractCookieValue(workerLoginRes, SESSION_COOKIE_NAME);
+
+    const samePhotoRes = await workerProofPost(
+      makeJsonRequest(
+        'http://localhost/api/worker/submit-proof',
+        'POST',
+        {
+          ticketId: created.id,
+          completionNotes: 'Attempting to pass off citizen photo as completed repair.',
+          completionPhotoUrl: beforePhotoPng,
+        },
+        workerCookie
+      )
+    );
+    expect(samePhotoRes.status).toBe(400);
+    const samePhotoJson = await samePhotoRes.json();
+    expect(samePhotoJson.error).toContain('Plagiarism Detected');
+    expect(samePhotoJson.error).toContain('Before');
+
+    // Audit log records WORKER_PLAGIARISM_BLOCKED
+    const analyticsRes = await adminAnalyticsGet(
+      makeJsonRequest('http://localhost/api/admin/analytics', 'GET', undefined, adminCookie)
+    );
+    const analyticsJson = await analyticsRes.json();
+    expect(
+      analyticsJson.auditLogs.some(
+        (l: { action: string; targetTicketId: string }) =>
+          l.action === 'WORKER_PLAGIARISM_BLOCKED' && l.targetTicketId === created.id
+      )
+    ).toBe(true);
+  });
+
+  it('validates /api/auth/worker-login auth failures and /api/worker/submit-proof edge cases (400, 401, 403, 404)', async () => {
+    const validPng =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+    // Worker login: missing fields -> 400; wrong passcode -> 401
+    const missingLogin = await workerLoginPost(
+      makeJsonRequest('http://localhost/api/auth/worker-login', 'POST', {
+        crewUnitId: 'CREW-E4',
+      })
+    );
+    expect(missingLogin.status).toBe(400);
+
+    const badPassLogin = await workerLoginPost(
+      makeJsonRequest('http://localhost/api/auth/worker-login', 'POST', {
+        crewUnitId: 'CREW-E4',
+        passcode: 'WrongPasscode!123',
+      })
+    );
+    expect(badPassLogin.status).toBe(401);
+
+    // Proof upload with tampered session -> 401
+    const tamperedProof = await workerProofPost(
+      makeJsonRequest(
+        'http://localhost/api/worker/submit-proof',
+        'POST',
+        {
+          ticketId: 'CR-2026-1001',
+          completionNotes: 'Tampered cookie attempt.',
+          completionPhotoUrl: validPng,
+        },
+        'invalid.session.token'
+      )
+    );
+    expect(tamperedProof.status).toBe(401);
+
+    // Citizen cannot call worker proof endpoint -> 403
+    const regRes = await registerPost(
+      makeJsonRequest('http://localhost/api/auth/register', 'POST', {
+        name: 'Citizen Tester',
+        email: 'citizen.tester@example.com',
+        password: 'Password123!',
+      })
+    );
+    const citizenCookie = extractCookieValue(regRes, SESSION_COOKIE_NAME);
+    const citizenProof = await workerProofPost(
+      makeJsonRequest(
+        'http://localhost/api/worker/submit-proof',
+        'POST',
+        {
+          ticketId: 'CR-2026-1001',
+          completionNotes: 'Citizen trying worker endpoint.',
+          completionPhotoUrl: validPng,
+        },
+        citizenCookie
+      )
+    );
+    expect(citizenProof.status).toBe(403);
+
+    // Sign in as CREW-LEAD for payload & status edge cases
+    const leadLogin = await workerLoginPost(
+      makeJsonRequest('http://localhost/api/auth/worker-login', 'POST', {
+        crewUnitId: 'CREW-LEAD',
+        passcode: 'Crew@Lead!2026',
+      })
+    );
+    const leadCookie = extractCookieValue(leadLogin, SESSION_COOKIE_NAME);
+
+    // Missing ticketId -> 400
+    const missingTicket = await workerProofPost(
+      makeJsonRequest(
+        'http://localhost/api/worker/submit-proof',
+        'POST',
+        {
+          completionNotes: 'Repaired junction box.',
+          completionPhotoUrl: validPng,
+        },
+        leadCookie
+      )
+    );
+    expect(missingTicket.status).toBe(400);
+
+    // Short completionNotes -> 400
+    const shortNotes = await workerProofPost(
+      makeJsonRequest(
+        'http://localhost/api/worker/submit-proof',
+        'POST',
+        {
+          ticketId: 'CR-2026-1001',
+          completionNotes: 'Done',
+          completionPhotoUrl: validPng,
+        },
+        leadCookie
+      )
+    );
+    expect(shortNotes.status).toBe(400);
+
+    // Oversized (>1.5 MB) valid-header PNG payload -> 400
+    const oversizedBuf = Buffer.alloc(1_550_000, 0xaa);
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(oversizedBuf, 0);
+    const oversizedPng = `data:image/png;base64,${oversizedBuf.toString('base64')}`;
+    const oversizedRes = await workerProofPost(
+      makeJsonRequest(
+        'http://localhost/api/worker/submit-proof',
+        'POST',
+        {
+          ticketId: 'CR-2026-1001',
+          completionNotes: 'Repaired streetlight pole feeder.',
+          completionPhotoUrl: oversizedPng,
+        },
+        leadCookie
+      )
+    );
+    expect(oversizedRes.status).toBe(400);
+
+    // Unknown ticket ID -> 404
+    const unknownTicket = await workerProofPost(
+      makeJsonRequest(
+        'http://localhost/api/worker/submit-proof',
+        'POST',
+        {
+          ticketId: 'CR-2026-9999',
+          completionNotes: 'Completed non-existent job.',
+          completionPhotoUrl: validPng,
+        },
+        leadCookie
+      )
+    );
+    expect(unknownTicket.status).toBe(404);
+
+    // Ticket still in Reported status (CR-2026-1002) -> 400
+    const reportedTicket = await workerProofPost(
+      makeJsonRequest(
+        'http://localhost/api/worker/submit-proof',
+        'POST',
+        {
+          ticketId: 'CR-2026-1002',
+          completionNotes: 'Attempted proof before dispatch.',
+          completionPhotoUrl: validPng,
+        },
+        leadCookie
+      )
+    );
+    expect(reportedTicket.status).toBe(400);
+  });
+
+  it('handles /api/auth/me GET and PATCH for unauthenticated, valid, and invalid profile updates', async () => {
+    // Unauthenticated GET returns { user: null } (200)
+    const unauthMe = await meGet(new Request('http://localhost/api/auth/me'));
+    expect(unauthMe.status).toBe(200);
+    const unauthMeJson = await unauthMe.json();
+    expect(unauthMeJson.user).toBeNull();
+
+    // Unauthenticated PATCH rejected -> 401
+    const unauthPatch = await mePatch(
+      makeJsonRequest('http://localhost/api/auth/me', 'PATCH', { name: 'Anonymous' })
+    );
+    expect(unauthPatch.status).toBe(401);
+
+    // Register citizen and verify GET + PATCH
+    const regRes = await registerPost(
+      makeJsonRequest('http://localhost/api/auth/register', 'POST', {
+        name: 'Meera Nair',
+        email: 'meera.nair@example.com',
+        password: 'Password123!',
+      })
+    );
+    expect(regRes.status).toBe(201);
+    const citizenCookie = extractCookieValue(regRes, SESSION_COOKIE_NAME);
+
+    const authGet = await meGet(
+      makeJsonRequest('http://localhost/api/auth/me', 'GET', undefined, citizenCookie)
+    );
+    expect(authGet.status).toBe(200);
+    const authGetJson = await authGet.json();
+    expect(authGetJson.user.email).toBe('meera.nair@example.com');
+    expect(authGetJson.user.name).toBe('Meera Nair');
+
+    // Invalid short name -> 400
+    const shortNamePatch = await mePatch(
+      makeJsonRequest('http://localhost/api/auth/me', 'PATCH', { name: 'M' }, citizenCookie)
+    );
+    expect(shortNamePatch.status).toBe(400);
+
+    // Valid name update -> 200 and updated profile returned
+    const validPatch = await mePatch(
+      makeJsonRequest(
+        'http://localhost/api/auth/me',
+        'PATCH',
+        { name: 'Meera K. Nair' },
+        citizenCookie
+      )
+    );
+    expect(validPatch.status).toBe(200);
+    const validPatchJson = await validPatch.json();
+    expect(validPatchJson.user.name).toBe('Meera K. Nair');
+  });
+
+  it('enforces Admin 2FA 5-attempt lockout and permanently burns the challenge after 5 failed attempts', async () => {
+    const step1Res = await loginPost(
+      makeJsonRequest('http://localhost/api/auth/login', 'POST', {
+        email: 'admin@civicresolve.gov',
+        password: 'TestAdmin#2026!Secure',
+        step: 'credentials',
+      })
+    );
+    expect(step1Res.status).toBe(200);
+    const { challengeId, demoCode } = await step1Res.json();
+    expect(challengeId).toBeTruthy();
+    expect(demoCode).toMatch(/^\d{6}$/);
+
+    const wrongCode = demoCode === '111111' ? '222222' : '111111';
+
+    // 5 failed attempts decrement remaining count from 4 down to 0
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      const failRes = await loginPost(
+        makeJsonRequest('http://localhost/api/auth/login', 'POST', {
+          step: 'verify_2fa',
+          challengeId,
+          code: wrongCode,
+        })
+      );
+      expect(failRes.status).toBe(400);
+      const failJson = await failRes.json();
+      expect(failJson.error).toContain(`${5 - attempt} attempt`);
+    }
+
+    // 6th attempt — even with the valid OTP — is locked out and burns the challenge
+    const lockedRes = await loginPost(
+      makeJsonRequest('http://localhost/api/auth/login', 'POST', {
+        step: 'verify_2fa',
+        challengeId,
+        code: demoCode,
+      })
+    );
+    expect(lockedRes.status).toBe(400);
+    const lockedJson = await lockedRes.json();
+    expect(lockedJson.error).toContain('Too many incorrect verification attempts');
+
+    // Subsequent attempts confirm the challenge is permanently burned
+    const burnedRes = await loginPost(
+      makeJsonRequest('http://localhost/api/auth/login', 'POST', {
+        step: 'verify_2fa',
+        challengeId,
+        code: demoCode,
+      })
+    );
+    expect(burnedRes.status).toBe(400);
+    const burnedJson = await burnedRes.json();
+    expect(burnedJson.error).toContain('expired or not found');
+  });
 });

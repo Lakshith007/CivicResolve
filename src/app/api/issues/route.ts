@@ -9,7 +9,6 @@ import {
 } from '@/lib/authGuards';
 import {
   createIssue,
-  getAllIssues,
   getDashboardStats,
   hydrateIssuesFromFirestore,
   toPublicIssue,

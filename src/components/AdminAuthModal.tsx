@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
   ArrowLeft,
@@ -43,6 +43,55 @@ export function AdminAuthModal({
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResending, setIsResending] = useState(false);
+
+  const emailInputRef = useRef<HTMLInputElement | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const wasOpenRef = useRef(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // Reset modal state on open, capture/restore focus, and close on Escape
+  useEffect(() => {
+    if (isOpen) {
+      if (!wasOpenRef.current) {
+        previousFocusRef.current = document.activeElement as HTMLElement | null;
+      }
+      wasOpenRef.current = true;
+      setStep('credentials');
+      setEmail('');
+      setPassword('');
+      setChallengeId('');
+      setMaskedEmail('');
+      setDemoCode('');
+      setOtpCode('');
+      setExpiresIn(300);
+      setError(null);
+      setIsSubmitting(false);
+      setIsResending(false);
+
+      const frame = requestAnimationFrame(() => {
+        emailInputRef.current?.focus();
+      });
+
+      const handleKeyDown = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          onCloseRef.current();
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => {
+        cancelAnimationFrame(frame);
+        window.removeEventListener('keydown', handleKeyDown);
+      };
+    }
+
+    if (wasOpenRef.current) {
+      wasOpenRef.current = false;
+      previousFocusRef.current?.focus();
+      previousFocusRef.current = null;
+    }
+  }, [isOpen]);
 
   // Timer countdown for OTP expiration
   useEffect(() => {
@@ -263,6 +312,7 @@ export function AdminAuthModal({
                     aria-hidden="true"
                   />
                   <input
+                    ref={emailInputRef}
                     id="admin-email-input"
                     type="email"
                     required
@@ -304,15 +354,15 @@ export function AdminAuthModal({
                 <button
                   type="button"
                   onClick={handleFillDemoAdmin}
-                  className="inline-flex items-center gap-1.5 text-[11px] font-medium text-blue-400 hover:text-blue-300 hover:underline"
+                  className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 text-[11px] font-medium text-blue-400 hover:text-blue-300 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 >
                   <Sparkles className="h-3 w-3" aria-hidden="true" />
                   <span>Fill Demo Admin Credentials</span>
                 </button>
               </div>
 
-              <div className="rounded-xl border border-slate-800 bg-slate-800/40 p-3 text-[11px] text-slate-400">
-                <div className="flex items-center gap-1.5 font-medium text-slate-300">
+              <div className="rounded-xl border border-slate-800 bg-slate-800/40 p-3 text-[11px] text-slate-300">
+                <div className="flex items-center gap-1.5 font-medium text-slate-200">
                   <ShieldAlert className="h-3.5 w-3.5 text-amber-400" aria-hidden="true" />
                   <span>Strict RBAC &amp; 2FA Policy</span>
                 </div>
@@ -324,7 +374,7 @@ export function AdminAuthModal({
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/30 transition hover:bg-blue-500 disabled:opacity-50"
+                className="w-full rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/30 transition hover:bg-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 disabled:opacity-50"
               >
                 {isSubmitting ? (
                   <span className="inline-flex items-center gap-2">
@@ -370,7 +420,7 @@ export function AdminAuthModal({
                     <button
                       type="button"
                       onClick={() => setOtpCode(demoCode)}
-                      className="rounded bg-blue-600 px-2 py-1 text-[11px] font-medium text-white transition hover:bg-blue-500"
+                      className="rounded bg-blue-600 px-2 py-1 text-[11px] font-medium text-white transition hover:bg-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                     >
                       Auto-fill Code
                     </button>
@@ -412,7 +462,7 @@ export function AdminAuthModal({
                   type="button"
                   onClick={handleResendCode}
                   disabled={isResending}
-                  className="inline-flex items-center gap-1 font-medium text-blue-400 hover:text-blue-300 disabled:opacity-50"
+                  className="inline-flex items-center gap-1 rounded px-1 py-0.5 font-medium text-blue-400 hover:text-blue-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-50"
                 >
                   <RefreshCw className={`h-3 w-3 ${isResending ? 'animate-spin' : ''}`} aria-hidden="true" />
                   <span>Resend Code</span>
@@ -425,7 +475,7 @@ export function AdminAuthModal({
                   type="button"
                   onClick={() => handleVerify2FA()}
                   disabled={isSubmitting || otpCode.length !== 6 || expiresIn <= 0}
-                  className="w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/30 transition hover:bg-emerald-500 disabled:opacity-50"
+                  className="w-full rounded-xl bg-emerald-700 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-700/30 transition hover:bg-emerald-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 disabled:opacity-50"
                 >
                   {isSubmitting ? (
                     <span className="inline-flex items-center gap-2">
@@ -443,7 +493,7 @@ export function AdminAuthModal({
                     setStep('credentials');
                     setError(null);
                   }}
-                  className="inline-flex w-full items-center justify-center gap-1 py-1 text-xs text-slate-400 hover:text-slate-200"
+                  className="inline-flex w-full items-center justify-center gap-1 rounded py-1 text-xs text-slate-300 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                 >
                   <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
                   <span>Change administrator account</span>

@@ -85,6 +85,19 @@ export function AdminCommandClient({
       .slice(0, 6);
   }, [issues]);
 
+  const refreshAnalyticsOnly = async () => {
+    try {
+      const analyticsRes = await fetch('/api/admin/analytics', { cache: 'no-store' });
+      if (analyticsRes.ok) {
+        const aData = await analyticsRes.json();
+        if (aData.stats) setStats(aData.stats);
+        if (Array.isArray(aData.auditLogs)) setAuditLogs(aData.auditLogs);
+      }
+    } catch {
+      // Non-blocking audit/analytics refresh
+    }
+  };
+
   const refreshCommandData = async () => {
     setIsRefreshing(true);
     try {
@@ -107,6 +120,26 @@ export function AdminCommandClient({
     }
   };
 
+  const submitAdminPatch = async (
+    id: string,
+    payload: Record<string, unknown>,
+    fallbackError: string
+  ): Promise<{ ok: boolean; error?: string }> => {
+    const res = await fetch(`/api/issues/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { ok: false, error: data.error || fallbackError };
+    }
+    setIssues((prev) => prev.map((item) => (item.id === id ? data.issue : item)));
+    if (data.stats) setStats(data.stats);
+    await refreshAnalyticsOnly();
+    return { ok: true };
+  };
+
   const handleUpdateIssue = async (
     id: string,
     payload: {
@@ -118,19 +151,7 @@ export function AdminCommandClient({
       resolutionEvidenceUrl?: string;
     }
   ): Promise<{ ok: boolean; error?: string }> => {
-    const res = await fetch(`/api/issues/${encodeURIComponent(id)}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      return { ok: false, error: data.error || 'Failed to update issue.' };
-    }
-    setIssues((prev) => prev.map((item) => (item.id === id ? data.issue : item)));
-    if (data.stats) setStats(data.stats);
-    await refreshCommandData();
-    return { ok: true };
+    return submitAdminPatch(id, payload, 'Failed to update issue.');
   };
 
   const handleVerifyFieldWork = async (
@@ -141,19 +162,7 @@ export function AdminCommandClient({
       rejectionReason?: string;
     }
   ): Promise<{ ok: boolean; error?: string }> => {
-    const res = await fetch(`/api/issues/${encodeURIComponent(id)}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      return { ok: false, error: data.error || 'Failed to record verification decision.' };
-    }
-    setIssues((prev) => prev.map((item) => (item.id === id ? data.issue : item)));
-    if (data.stats) setStats(data.stats);
-    await refreshCommandData();
-    return { ok: true };
+    return submitAdminPatch(id, payload, 'Failed to record verification decision.');
   };
 
   const handleLogout = async () => {
@@ -380,7 +389,7 @@ export function AdminCommandClient({
       </header>
 
       {/* Operations Command Center Main Content */}
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <main id="main-content" className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <AdminDashboard
           activeSection={activeSection}
           onNavigateSection={setActiveSection}

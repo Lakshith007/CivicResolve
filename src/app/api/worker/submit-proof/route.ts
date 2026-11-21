@@ -50,7 +50,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            'A valid completion proof photo (PNG, JPEG, or WebP under 1.4 MB) is required.',
+            'A valid completion proof photo (PNG, JPEG, or WebP under 1.5 MB) is required.',
         },
         { status: 400 }
       );
