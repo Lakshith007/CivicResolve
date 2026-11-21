@@ -377,4 +377,89 @@ describe('CivicResolve RBAC & Application Security Verification', () => {
     expect(analyticsJson.auditLogs[0].targetTicketId).toBe('CR-2026-1003');
     expect(analyticsJson.auditLogs[0].action).toBe('ADMIN_TRIAGE_AND_PRIORITY_OVERRIDE');
   });
+
+  it('enforces municipal 2-step verification (2FA) for administrators and blocks citizens from admin login', async () => {
+    // 1. Citizen account cannot log in through Admin authentication -> 403 Forbidden
+    const citizenReg = await registerPost(
+      makeJsonRequest('http://localhost/api/auth/register', 'POST', {
+        name: 'Regular Citizen',
+        email: 'regular.citizen@example.com',
+        password: 'Password123!',
+      })
+    );
+    expect(citizenReg.status).toBe(201);
+
+    const citizenLoginAttempt = await loginPost(
+      makeJsonRequest('http://localhost/api/auth/login', 'POST', {
+        email: 'regular.citizen@example.com',
+        password: 'Password123!',
+        step: 'credentials',
+      })
+    );
+    expect(citizenLoginAttempt.status).toBe(403);
+    const citizenLoginJson = await citizenLoginAttempt.json();
+    expect(citizenLoginJson.error).toContain('Access restricted');
+
+    // 2. Admin valid credentials -> Step 1 returns 2FA challenge
+    const adminStep1 = await loginPost(
+      makeJsonRequest('http://localhost/api/auth/login', 'POST', {
+        email: 'admin@civicresolve.gov',
+        password: 'TestAdmin#2026!Secure',
+        step: 'credentials',
+      })
+    );
+    expect(adminStep1.status).toBe(200);
+    const step1Json = await adminStep1.json();
+    expect(step1Json.requires2FA).toBe(true);
+    expect(step1Json.challengeId).toBeTruthy();
+    expect(step1Json.maskedEmail).toBe('ad***@civicresolve.gov');
+    expect(step1Json.demoCode).toMatch(/^\d{6}$/);
+
+    const challengeId = step1Json.challengeId;
+    const validOtp = step1Json.demoCode;
+
+    // 3. Step 2: Invalid 2FA code is rejected -> 400
+    const invalidOtpRes = await loginPost(
+      makeJsonRequest('http://localhost/api/auth/login', 'POST', {
+        step: 'verify_2fa',
+        challengeId,
+        code: '000000',
+      })
+    );
+    expect(invalidOtpRes.status).toBe(400);
+    const invalidJson = await invalidOtpRes.json();
+    expect(invalidJson.error).toContain('Incorrect 6-digit security code');
+
+    // 4. Step 2: Correct 2FA code succeeds -> 200, returns admin user & sets HTTP-only cookie
+    const validOtpRes = await loginPost(
+      makeJsonRequest('http://localhost/api/auth/login', 'POST', {
+        step: 'verify_2fa',
+        challengeId,
+        code: validOtp,
+      })
+    );
+    expect(validOtpRes.status).toBe(200);
+    const validJson = await validOtpRes.json();
+    expect(validJson.success).toBe(true);
+    expect(validJson.user.email).toBe('admin@civicresolve.gov');
+    expect(validJson.user.role).toBe('ADMIN');
+    const admin2FACookie = extractCookieValue(validOtpRes, SESSION_COOKIE_NAME);
+    expect(admin2FACookie).toBeTruthy();
+
+    // 5. Code replay / re-use must fail (single-use OTP burned)
+    const replayRes = await loginPost(
+      makeJsonRequest('http://localhost/api/auth/login', 'POST', {
+        step: 'verify_2fa',
+        challengeId,
+        code: validOtp,
+      })
+    );
+    expect(replayRes.status).toBe(400);
+
+    // 6. Verified admin session cookie has full access to Admin Command
+    const testAdminAccess = await adminComplaintsGet(
+      makeJsonRequest('http://localhost/api/admin/complaints', 'GET', undefined, admin2FACookie)
+    );
+    expect(testAdminAccess.status).toBe(200);
+  });
 });

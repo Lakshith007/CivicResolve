@@ -335,4 +335,152 @@ export function getSessionCookieOptions(
 export function resetAuthStoreForTesting(): void {
   globalForAuth.__civicUsersCache = [];
   globalForAuth.__civicRevokedCache = [];
+  if (globalFor2FA.__civic2FAChallenges) {
+    globalFor2FA.__civic2FAChallenges.clear();
+  }
+}
+
+interface TwoFactorChallenge {
+  challengeId: string;
+  userId: string;
+  email: string;
+  codeHash: string;
+  plainCodeForDemo: string;
+  expiresAt: number;
+  attempts: number;
+}
+
+const globalFor2FA = globalThis as unknown as {
+  __civic2FAChallenges?: Map<string, TwoFactorChallenge>;
+};
+
+if (!globalFor2FA.__civic2FAChallenges) {
+  globalFor2FA.__civic2FAChallenges = new Map();
+}
+
+export function maskEmail(email: string): string {
+  const parts = email.split('@');
+  if (parts.length !== 2) return email;
+  const [local, domain] = parts;
+  const visible = local.length <= 2 ? local[0] || 'a' : local.slice(0, 2);
+  return `${visible}***@${domain}`;
+}
+
+export function create2FAChallenge(user: SessionUser): {
+  challengeId: string;
+  maskedEmail: string;
+  demoCode: string;
+  expiresInSeconds: number;
+} {
+  const map = globalFor2FA.__civic2FAChallenges!;
+  const now = Date.now();
+  for (const [id, c] of Array.from(map.entries())) {
+    if (c.expiresAt <= now) map.delete(id);
+  }
+
+  const challengeId = `ch_${crypto.randomUUID()}`;
+  const code = crypto.randomInt(100000, 999999).toString();
+  const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+
+  const challenge: TwoFactorChallenge = {
+    challengeId,
+    userId: user.id,
+    email: user.email,
+    codeHash,
+    plainCodeForDemo: code,
+    expiresAt: now + 5 * 60 * 1000, // 5 minutes
+    attempts: 0,
+  };
+
+  map.set(challengeId, challenge);
+
+  return {
+    challengeId,
+    maskedEmail: maskEmail(user.email),
+    demoCode: code,
+    expiresInSeconds: 300,
+  };
+}
+
+export function verify2FAChallenge(
+  challengeId: string,
+  inputCode: string
+): { success: true; user: SessionUser } | { success: false; error: string } {
+  const map = globalFor2FA.__civic2FAChallenges!;
+  const challenge = map.get(challengeId);
+
+  if (!challenge) {
+    return {
+      success: false,
+      error: 'Two-step verification session expired or not found. Please log in again.',
+    };
+  }
+
+  if (Date.now() > challenge.expiresAt) {
+    map.delete(challengeId);
+    return {
+      success: false,
+      error: 'Security verification code has expired (5m window). Please request a new code.',
+    };
+  }
+
+  challenge.attempts += 1;
+  if (challenge.attempts > 5) {
+    map.delete(challengeId);
+    return {
+      success: false,
+      error: 'Too many incorrect verification attempts. Challenge locked for municipal security.',
+    };
+  }
+
+  const cleanedCode = (inputCode || '').trim();
+  const inputHash = crypto.createHash('sha256').update(cleanedCode).digest('hex');
+  const match = crypto.timingSafeEqual(
+    Buffer.from(inputHash, 'hex'),
+    Buffer.from(challenge.codeHash, 'hex')
+  );
+
+  if (!match) {
+    const remaining = 5 - challenge.attempts;
+    return {
+      success: false,
+      error: `Incorrect 6-digit security code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`,
+    };
+  }
+
+  // Single-use code: burn immediately upon successful verification
+  map.delete(challengeId);
+
+  const record = findUserById(challenge.userId);
+  if (!record) {
+    return { success: false, error: 'User record not found.' };
+  }
+
+  return { success: true, user: toSessionUser(record) };
+}
+
+export function resend2FAChallenge(challengeId: string): {
+  success: true;
+  demoCode: string;
+  maskedEmail: string;
+  expiresInSeconds: number;
+} | { success: false; error: string } {
+  const map = globalFor2FA.__civic2FAChallenges!;
+  const existing = map.get(challengeId);
+  if (!existing) {
+    return { success: false, error: 'Session expired. Please re-enter your credentials.' };
+  }
+
+  const code = crypto.randomInt(100000, 999999).toString();
+  existing.codeHash = crypto.createHash('sha256').update(code).digest('hex');
+  existing.plainCodeForDemo = code;
+  existing.expiresAt = Date.now() + 5 * 60 * 1000;
+  existing.attempts = 0;
+
+  return {
+    success: true,
+    demoCode: code,
+    maskedEmail: maskEmail(existing.email),
+    expiresInSeconds: 300,
+  };
 }
