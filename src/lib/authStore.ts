@@ -51,6 +51,7 @@ export function verifyPassword(password: string, storedHash: string): boolean {
 
 function persistUsers(users: UserRecord[]): void {
   globalForAuth.__civicUsersCache = JSON.parse(JSON.stringify(users)) as UserRecord[];
+  if (process.env.NODE_ENV === 'test') return;
   try {
     const dir = path.dirname(USERS_FILE_PATH);
     if (!fs.existsSync(dir)) {
@@ -62,10 +63,21 @@ function persistUsers(users: UserRecord[]): void {
   }
 }
 
+function stripSurroundingQuotes(value: string | undefined): string {
+  const trimmed = value?.trim() || '';
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
 function ensureBootstrapAdmin(users: UserRecord[]): UserRecord[] {
-  const adminEmail = process.env.ADMIN_BOOTSTRAP_EMAIL?.trim().toLowerCase();
-  const adminPassword = process.env.ADMIN_BOOTSTRAP_PASSWORD?.trim();
-  const adminName = process.env.ADMIN_BOOTSTRAP_NAME?.trim() || 'Municipal Administrator';
+  const adminEmail = stripSurroundingQuotes(process.env.ADMIN_BOOTSTRAP_EMAIL).toLowerCase();
+  const adminPassword = stripSurroundingQuotes(process.env.ADMIN_BOOTSTRAP_PASSWORD);
+  const adminName = stripSurroundingQuotes(process.env.ADMIN_BOOTSTRAP_NAME) || 'Municipal Administrator';
 
   if (
     !adminEmail ||
@@ -75,8 +87,8 @@ function ensureBootstrapAdmin(users: UserRecord[]): UserRecord[] {
     return users;
   }
 
-  const existing = users.find((u) => u.email.toLowerCase() === adminEmail);
-  if (!existing) {
+  const existingIdx = users.findIndex((u) => u.email.toLowerCase() === adminEmail);
+  if (existingIdx === -1) {
     const bootstrapped: UserRecord = {
       id: 'usr-admin-bootstrap',
       name: adminName,
@@ -88,6 +100,21 @@ function ensureBootstrapAdmin(users: UserRecord[]): UserRecord[] {
     const next = [bootstrapped, ...users];
     persistUsers(next);
     return next;
+  }
+
+  const existing = users[existingIdx];
+  if (
+    existing.id === 'usr-admin-bootstrap' &&
+    !verifyPassword(adminPassword, existing.passwordHash)
+  ) {
+    const updated = [...users];
+    updated[existingIdx] = {
+      ...existing,
+      name: adminName,
+      passwordHash: hashPassword(adminPassword),
+    };
+    persistUsers(updated);
+    return updated;
   }
 
   return users;
@@ -136,6 +163,7 @@ function persistRevokedSessions(entries: RevokedEntry[]): void {
   const now = Date.now();
   const active = entries.filter((entry) => entry.exp > now);
   globalForAuth.__civicRevokedCache = active;
+  if (process.env.NODE_ENV === 'test') return;
   try {
     const dir = path.dirname(REVOKED_FILE_PATH);
     if (!fs.existsSync(dir)) {
@@ -335,27 +363,68 @@ export function getSessionCookieOptions(
 export function resetAuthStoreForTesting(): void {
   globalForAuth.__civicUsersCache = [];
   globalForAuth.__civicRevokedCache = [];
-  if (globalFor2FA.__civic2FAChallenges) {
-    globalFor2FA.__civic2FAChallenges.clear();
-  }
+  globalFor2FA.__civic2FAAttempts?.clear();
+  globalFor2FA.__civic2FABurned?.clear();
 }
 
-interface TwoFactorChallenge {
-  challengeId: string;
-  userId: string;
+interface Signed2FAPayload {
+  cid: string;
+  uid: string;
   email: string;
   codeHash: string;
-  plainCodeForDemo: string;
-  expiresAt: number;
-  attempts: number;
+  exp: number;
 }
 
 const globalFor2FA = globalThis as unknown as {
-  __civic2FAChallenges?: Map<string, TwoFactorChallenge>;
+  __civic2FAAttempts?: Map<string, number>;
+  __civic2FABurned?: Set<string>;
 };
 
-if (!globalFor2FA.__civic2FAChallenges) {
-  globalFor2FA.__civic2FAChallenges = new Map();
+if (!globalFor2FA.__civic2FAAttempts) {
+  globalFor2FA.__civic2FAAttempts = new Map();
+}
+if (!globalFor2FA.__civic2FABurned) {
+  globalFor2FA.__civic2FABurned = new Set();
+}
+
+function sign2FAPayload(payload: Signed2FAPayload): string {
+  const encoded = Buffer.from(JSON.stringify(payload), 'utf-8').toString('base64url');
+  const sig = crypto
+    .createHmac('sha256', getSessionSecret())
+    .update(`2fa:${encoded}`)
+    .digest('base64url');
+  return `${encoded}.${sig}`;
+}
+
+function verify2FAToken(challengeId: string): Signed2FAPayload | null {
+  if (!challengeId || typeof challengeId !== 'string') return null;
+  const parts = challengeId.split('.');
+  if (parts.length !== 2) return null;
+  const [encoded, sig] = parts;
+  if (!encoded || !sig) return null;
+
+  const expectedSig = crypto
+    .createHmac('sha256', getSessionSecret())
+    .update(`2fa:${encoded}`)
+    .digest('base64url');
+
+  const sigBuf = Buffer.from(sig, 'utf-8');
+  const expectedBuf = Buffer.from(expectedSig, 'utf-8');
+  if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(
+      Buffer.from(encoded, 'base64url').toString('utf-8')
+    ) as Signed2FAPayload;
+    if (!parsed.cid || !parsed.uid || !parsed.codeHash || typeof parsed.exp !== 'number') {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 export function maskEmail(email: string): string {
@@ -372,27 +441,17 @@ export function create2FAChallenge(user: SessionUser): {
   demoCode: string;
   expiresInSeconds: number;
 } {
-  const map = globalFor2FA.__civic2FAChallenges!;
-  const now = Date.now();
-  for (const [id, c] of Array.from(map.entries())) {
-    if (c.expiresAt <= now) map.delete(id);
-  }
-
-  const challengeId = `ch_${crypto.randomUUID()}`;
+  const cid = `ch_${crypto.randomUUID()}`;
   const code = crypto.randomInt(100000, 999999).toString();
   const codeHash = crypto.createHash('sha256').update(code).digest('hex');
 
-  const challenge: TwoFactorChallenge = {
-    challengeId,
-    userId: user.id,
+  const challengeId = sign2FAPayload({
+    cid,
+    uid: user.id,
     email: user.email,
     codeHash,
-    plainCodeForDemo: code,
-    expiresAt: now + 5 * 60 * 1000, // 5 minutes
-    attempts: 0,
-  };
-
-  map.set(challengeId, challenge);
+    exp: Date.now() + 5 * 60 * 1000, // 5 minutes
+  });
 
   return {
     challengeId,
@@ -406,27 +465,27 @@ export function verify2FAChallenge(
   challengeId: string,
   inputCode: string
 ): { success: true; user: SessionUser } | { success: false; error: string } {
-  const map = globalFor2FA.__civic2FAChallenges!;
-  const challenge = map.get(challengeId);
+  const payload = verify2FAToken(challengeId);
 
-  if (!challenge) {
+  if (!payload || globalFor2FA.__civic2FABurned!.has(payload.cid)) {
     return {
       success: false,
       error: 'Two-step verification session expired or not found. Please log in again.',
     };
   }
 
-  if (Date.now() > challenge.expiresAt) {
-    map.delete(challengeId);
+  if (Date.now() > payload.exp) {
+    globalFor2FA.__civic2FABurned!.add(payload.cid);
     return {
       success: false,
       error: 'Security verification code has expired (5m window). Please request a new code.',
     };
   }
 
-  challenge.attempts += 1;
-  if (challenge.attempts > 5) {
-    map.delete(challengeId);
+  const attempts = (globalFor2FA.__civic2FAAttempts!.get(payload.cid) || 0) + 1;
+  globalFor2FA.__civic2FAAttempts!.set(payload.cid, attempts);
+  if (attempts > 5) {
+    globalFor2FA.__civic2FABurned!.add(payload.cid);
     return {
       success: false,
       error: 'Too many incorrect verification attempts. Challenge locked for municipal security.',
@@ -437,11 +496,11 @@ export function verify2FAChallenge(
   const inputHash = crypto.createHash('sha256').update(cleanedCode).digest('hex');
   const match = crypto.timingSafeEqual(
     Buffer.from(inputHash, 'hex'),
-    Buffer.from(challenge.codeHash, 'hex')
+    Buffer.from(payload.codeHash, 'hex')
   );
 
   if (!match) {
-    const remaining = 5 - challenge.attempts;
+    const remaining = 5 - attempts;
     return {
       success: false,
       error: `Incorrect 6-digit security code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`,
@@ -449,9 +508,10 @@ export function verify2FAChallenge(
   }
 
   // Single-use code: burn immediately upon successful verification
-  map.delete(challengeId);
+  globalFor2FA.__civic2FABurned!.add(payload.cid);
+  globalFor2FA.__civic2FAAttempts!.delete(payload.cid);
 
-  const record = findUserById(challenge.userId);
+  const record = findUserById(payload.uid);
   if (!record) {
     return { success: false, error: 'User record not found.' };
   }
@@ -461,24 +521,32 @@ export function verify2FAChallenge(
 
 export function resend2FAChallenge(challengeId: string): {
   success: true;
+  challengeId: string;
   demoCode: string;
   maskedEmail: string;
   expiresInSeconds: number;
 } | { success: false; error: string } {
-  const map = globalFor2FA.__civic2FAChallenges!;
-  const existing = map.get(challengeId);
-  if (!existing) {
+  const existing = verify2FAToken(challengeId);
+  if (!existing || globalFor2FA.__civic2FABurned!.has(existing.cid)) {
     return { success: false, error: 'Session expired. Please re-enter your credentials.' };
   }
 
+  // Burn old challenge and issue a fresh signed challenge
+  globalFor2FA.__civic2FABurned!.add(existing.cid);
+
   const code = crypto.randomInt(100000, 999999).toString();
-  existing.codeHash = crypto.createHash('sha256').update(code).digest('hex');
-  existing.plainCodeForDemo = code;
-  existing.expiresAt = Date.now() + 5 * 60 * 1000;
-  existing.attempts = 0;
+  const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+  const nextChallengeId = sign2FAPayload({
+    cid: `ch_${crypto.randomUUID()}`,
+    uid: existing.uid,
+    email: existing.email,
+    codeHash,
+    exp: Date.now() + 5 * 60 * 1000,
+  });
 
   return {
     success: true,
+    challengeId: nextChallengeId,
     demoCode: code,
     maskedEmail: maskEmail(existing.email),
     expiresInSeconds: 300,

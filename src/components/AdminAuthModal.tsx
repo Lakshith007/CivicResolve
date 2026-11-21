@@ -173,6 +173,7 @@ export function AdminAuthModal({
       const data = await res.json();
 
       if (res.ok && data.success) {
+        if (data.challengeId) setChallengeId(data.challengeId);
         setDemoCode(data.demoCode);
         setExpiresIn(data.expiresInSeconds || 300);
       } else {
