@@ -24,6 +24,7 @@ import {
   StatusBadge,
 } from '@/components/CivicBadges';
 import { CivicGoogleMap } from '@/components/CivicGoogleMap';
+import { projectToSpatialGrid } from '@/lib/geoUtils';
 
 interface TrackingDashboardProps {
   issues: CivicIssue[];
@@ -31,22 +32,6 @@ interface TrackingDashboardProps {
   highlightedId: string | null;
   currentUser?: SessionUser | null;
   onUpvote: (id: string) => Promise<void>;
-}
-
-const PIN_BOUNDS = {
-  minLat: 10.975,
-  maxLat: 11.045,
-  minLng: 76.925,
-  maxLng: 77.025,
-};
-
-function projectCoordinates(lat: number, lng: number): { x: number; y: number } {
-  const normX = (lng - PIN_BOUNDS.minLng) / (PIN_BOUNDS.maxLng - PIN_BOUNDS.minLng);
-  const normY = 1 - (lat - PIN_BOUNDS.minLat) / (PIN_BOUNDS.maxLat - PIN_BOUNDS.minLat);
-  return {
-    x: Math.max(8, Math.min(92, normX * 100)),
-    y: Math.max(10, Math.min(90, normY * 100)),
-  };
 }
 
 export function TrackingDashboard({
@@ -252,17 +237,17 @@ export function TrackingDashboard({
 
               {activeMapIssues.length === 0 ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
-                  <MapPin className="h-6 w-6 text-slate-400" aria-hidden="true" />
+                  <MapPin className="h-6 w-6 text-slate-300" aria-hidden="true" />
                   <p className="mt-2 text-xs font-semibold text-slate-200">
                     No active open pins for current filter
                   </p>
-                  <p className="mt-0.5 text-[11px] text-slate-400">
+                  <p className="mt-0.5 text-[11px] text-slate-300">
                     Resolved tickets are excluded from map hotspots and listed below.
                   </p>
                 </div>
               ) : (
                 activeMapIssues.map((issue) => {
-                  const pos = projectCoordinates(issue.coordinates.lat, issue.coordinates.lng);
+                  const pos = projectToSpatialGrid(issue.coordinates.lat, issue.coordinates.lng);
                   const isSelected = selectedMapIssue?.id === issue.id;
                   const pinColor =
                     issue.priority === 'Critical'
